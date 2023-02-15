@@ -20,7 +20,7 @@ from src.graphsage import *
 
 class ModelHandler(object):
 
-	def __init__(self, config):
+	def __init__(self, config, ckp):
 		args = argparse.Namespace(**config)
 		# load graph, feature, and label
 		[homo, relation1, relation2, relation3], feat_data, labels = load_data(args.data_name, prefix=args.data_dir)
@@ -29,7 +29,7 @@ class ModelHandler(object):
 		np.random.seed(args.seed)
 		random.seed(args.seed)
 		if args.data_name == 'yelp':
-			index = list(range(len(labels)))
+			index = list(range(len(labels))) # Stratified sampling으로 train/validation/test를 구분한다.
 			idx_train, idx_rest, y_train, y_rest = train_test_split(index, labels, stratify=labels, train_size=args.train_ratio,
 																	random_state=2, shuffle=True)
 			idx_valid, idx_test, y_valid, y_test = train_test_split(idx_rest, y_rest, stratify=y_rest, test_size=args.test_ratio,
@@ -37,7 +37,7 @@ class ModelHandler(object):
 
 		elif args.data_name == 'amazon':  # amazon
 			# 0-3304 are unlabeled nodes
-			index = list(range(3305, len(labels)))
+			index = list(range(3305, len(labels))) # Stratified sampling으로 train/validation/test를 구분한다.
 			idx_train, idx_rest, y_train, y_rest = train_test_split(index, labels[3305:], stratify=labels[3305:],
 																	train_size=args.train_ratio, random_state=2, shuffle=True)
 			idx_valid, idx_test, y_valid, y_test = train_test_split(idx_rest, y_rest, stratify=y_rest,
@@ -70,6 +70,7 @@ class ModelHandler(object):
 
 		print(f'Model: {args.model}, multi-relation aggregator: {args.multi_relation}, emb_size: {args.emb_size}.')
 		
+		self.ckp = ckp
 		self.args = args
 		self.dataset = {'feat_data': feat_data, 'labels': labels, 'adj_lists': adj_lists, 'homo': homo,
 						'idx_train': idx_train, 'idx_valid': idx_valid, 'idx_test': idx_test,
@@ -150,8 +151,9 @@ class ModelHandler(object):
 				end_time = time.time()
 				epoch_time += end_time - start_time
 				loss += loss.item()
-
-			print(f'Epoch: {epoch}, loss: {loss.item() / num_batches}, time: {epoch_time}s')
+			
+			train_line = f'Epoch: {epoch}, loss: {loss.item() / num_batches}, time: {epoch_time}s'
+			self.ckp.write_train_log(train_line)
 
 			# Valid the model for every $valid_epoch$ epoch
 			if epoch % args.valid_epochs == 0:

@@ -3,3 +3,6 @@
 *.log
 *.sh
 *.ipynb
+*.pickle
+*.pkl
+*.yml

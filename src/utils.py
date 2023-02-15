@@ -6,11 +6,42 @@ from scipy.io import loadmat
 import copy as cp
 from sklearn.metrics import f1_score, accuracy_score, recall_score, roc_auc_score, average_precision_score, confusion_matrix
 from collections import defaultdict
+from datetime import datetime
 
 
 """
 	Utility functions to handle data and evaluate model.
 """
+
+class log:
+	def __init__(self, config):
+		self.log_dir_path = "./log"
+		self.log_file_name = datetime.now().strftime("%Y-%m-%d %H:%M") + ".log"
+		self.train_log_path = os.path.join(self.log_dir_path, "train", log_file_name)
+		self.test_log_path = os.path.join(self.log_dir_path, "test", log_file_name)
+		self.multi_run_log_path = os.path.join(self.log_dir_path, "multi-run(total)", log_file_name)
+	
+	def write_train_log(line, print_line=True):
+		if print_line:
+			print(line)
+		log_file = open(self.train_log_path, 'a')
+		log_file.write(line + "\n")
+		log_file.close()
+
+	def write_test_log(line, print_line=True):
+		if print_line:
+			print(line)
+		log_file = open(self.test_log_path, 'a')
+		log_file.write(line + "\n")
+		log_file.close()
+	
+	def multi_run_log(line, print_line=True):
+		if print_line:
+			print(line)
+		log_file = open(self.multi_run_log_path, 'a')
+		log_file.write(line + "\n")
+		log_file.close()
+
 
 
 def load_data(data, prefix='data/'):
