@@ -72,40 +72,50 @@ class InterAgg(nn.Module):
 
 		# extract 1-hop neighbor ids from adj lists of each single-relation graph
 		to_neighs = []
-		for adj_list in self.adj_lists:
+		for adj_list in self.adj_lists: # 각 relation을 통해 연결되는 이웃 노드들의 set으로 구성된 list가 생성됨.
 			to_neighs.append([set(adj_list[int(node)]) for node in nodes])
 
+		"""
+		Relation에 따른 노드 set을 구하는 부분이 하드코딩 되어있음.
+		따라서 relation type이 다른 데이터셋을 학습할 경우 일부 코드 수정이 필요할 것으로 보임 (파서로 자동화 혹은 하드코딩으로 해결).
+		"""
 		# find unique nodes and their neighbors used in current batch
-		unique_nodes = set.union(set.union(*to_neighs[0]), set.union(*to_neighs[1]),
+		unique_nodes = set.union(set.union(*to_neighs[0]), set.union(*to_neighs[1]), # 배치에 포함된 노드와 그 이웃 노드들의 set이 생성됨.
 								 set.union(*to_neighs[2], set(nodes)))
 
 		# calculate label-aware scores
 		if self.cuda:
-			batch_features = self.features(torch.cuda.LongTensor(list(unique_nodes)))
-			pos_features = self.features(torch.cuda.LongTensor(list(self.train_pos)))
+			batch_features = self.features(torch.cuda.LongTensor(list(unique_nodes))) # unique node들에 대한 feature를 슬라이싱하여 batch_feature로 정의함.
+			pos_features = self.features(torch.cuda.LongTensor(list(self.train_pos))) # 그 중에서 positive sample의 feature를 슬라이싱하여 pos_features로 정의함.
 		else:
 			batch_features = self.features(torch.LongTensor(list(unique_nodes)))
 			pos_features = self.features(torch.LongTensor(list(self.train_pos)))
-		batch_scores = self.label_clf(batch_features)
-		pos_scores = self.label_clf(pos_features)
+		batch_scores = self.label_clf(batch_features) # batch_features를 latent space로 투영함.
+		pos_scores = self.label_clf(pos_features) # pos_features를 latent space로 투영함.
+
+		# 배치를 구성하는 노드의 ID(original graph의 index -> key)와 unique_nodes에서의 인덱스(-> value)를 매핑하는 딕셔너리를 정의함.
 		id_mapping = {node_id: index for node_id, index in zip(unique_nodes, range(len(unique_nodes)))}
 
 		# the label-aware scores for current batch of nodes
-		center_scores = batch_scores[itemgetter(*nodes)(id_mapping), :]
+		center_scores = batch_scores[itemgetter(*nodes)(id_mapping), :] # mapping 딕셔너리를 통해 배치 노드의 label-aware score를 구한다 (슬라이싱).
 
 		# get neighbor node id list for each batch node and relation
-		r1_list = [list(to_neigh) for to_neigh in to_neighs[0]]
+		r1_list = [list(to_neigh) for to_neigh in to_neighs[0]] # 각 relation을 통해 연결되는 이웃 노드들을 r*_list로 정의한다 (set을 list로 변환함.).
 		r2_list = [list(to_neigh) for to_neigh in to_neighs[1]]
 		r3_list = [list(to_neigh) for to_neigh in to_neighs[2]]
 
 		# assign label-aware scores to neighbor nodes for each batch node and relation
-		r1_scores = [batch_scores[itemgetter(*to_neigh)(id_mapping), :].view(-1, 2) for to_neigh in r1_list]
-		r2_scores = [batch_scores[itemgetter(*to_neigh)(id_mapping), :].view(-1, 2) for to_neigh in r2_list]
+		r1_scores = [batch_scores[itemgetter(*to_neigh)(id_mapping), :].view(-1, 2) for to_neigh in r1_list] # 각 relation마다
+		r2_scores = [batch_scores[itemgetter(*to_neigh)(id_mapping), :].view(-1, 2) for to_neigh in r2_list] # Batch에 존재하는 [개별 노드와 그 이웃에 대한 label-aware score]를 구한다 (슬라이싱). 
 		r3_scores = [batch_scores[itemgetter(*to_neigh)(id_mapping), :].view(-1, 2) for to_neigh in r3_list]
 
 		# count the number of neighbors kept for aggregation for each batch node and relation
-		r1_sample_num_list = [math.ceil(len(neighs) * self.thresholds[0]) for neighs in r1_list]
-		r2_sample_num_list = [math.ceil(len(neighs) * self.thresholds[1]) for neighs in r2_list]
+		""""
+		이 부분에서 threshold에 대한 부분은 하드코딩 되어 있음. 
+		따라서 모든 relation에 대하여 각 노드는 이웃의 유사도가 상위 50%에 해당하는 노드들로부터 message를 받게됨. 
+		"""
+		r1_sample_num_list = [math.ceil(len(neighs) * self.thresholds[0]) for neighs in r1_list] # 각 relation마다
+		r2_sample_num_list = [math.ceil(len(neighs) * self.thresholds[1]) for neighs in r2_list] # Batch에 존재하는 개별 노드가 몇 개의 이웃을 통해 aggregation 할 것인지 결정한다. 
 		r3_sample_num_list = [math.ceil(len(neighs) * self.thresholds[2]) for neighs in r3_list]
 
 		# intra-aggregation steps for each relation
@@ -159,15 +169,16 @@ class IntraAgg(nn.Module):
 	def forward(self, nodes, batch_labels, to_neighs_list, batch_scores, neigh_scores, pos_scores, sample_list, train_flag):
 		"""
 		Code partially from https://github.com/williamleif/graphsage-simple/
-		:param nodes: list of nodes in a batch
-		:param to_neighs_list: neighbor node id list for each batch node in one relation
-		:param batch_scores: the label-aware scores of batch nodes
-		:param neigh_scores: the label-aware scores 1-hop neighbors each batch node in one relation
-		:param pos_scores: the label-aware scores 1-hop neighbors for the minority positive nodes
-		:param train_flag: indicates whether in training or testing mode
-		:param sample_list: the number of neighbors kept for each batch node in one relation
-		:return to_feats: the aggregated embeddings of batch nodes neighbors in one relation
-		:return samp_scores: the average neighbor distances for each relation after filtering
+		:param | nodes: list of nodes in a batch
+		:param | to_neighs_list: neighbor node id list for each batch node in one relation
+		:param | batch_scores: the label-aware scores of batch nodes
+		:param | neigh_scores: the label-aware scores 1-hop neighbors each batch node in one relation
+		:param | pos_scores: the label-aware scores for the minority positive nodes
+		:param | sample_list: the number of neighbors kept for each batch node in one relation
+		:param | train_flag: indicates whether in training or testing mode
+
+		:return | to_feats: the aggregated embeddings of batch nodes neighbors in one relation
+		:return | samp_scores: the average neighbor distances for each relation after filtering
 		"""
 
 		# filer neighbors under given relation in the train mode
@@ -204,14 +215,14 @@ class IntraAgg(nn.Module):
 def choose_step_neighs(center_scores, center_labels, neigh_scores, neighs_list, minor_scores, minor_list, sample_list, sample_rate):
     """
     Choose step for neighborhood sampling
-    :param center_scores: the label-aware scores of batch nodes
-    :param center_labels: the label of batch nodes
-    :param neigh_scores: the label-aware scores 1-hop neighbors each batch node in one relation
-    :param neighs_list: neighbor node id list for each batch node in one relation
-	:param minor_scores: the label-aware scores for nodes of minority class in one relation
-    :param minor_list: minority node id list for each batch node in one relation
-    :param sample_list: the number of neighbors kept for each batch node in one relation
-	:para sample_rate: the ratio of the oversample neighbors for the minority class
+    :param | center_scores: the label-aware scores of batch nodes
+    :param | center_labels: the label of batch nodes
+    :param | neigh_scores: the label-aware scores 1-hop neighbors each batch node in one relation
+    :param | neighs_list: neighbor node id list for each batch node in one relation
+	:param | minor_scores: the label-aware scores for nodes of minority class in one relation
+    :param | minor_list: minority node id list for each batch node in one relation
+    :param | sample_list: the number of neighbors kept for each batch node in one relation
+	:param  |sample_rate: the ratio of the oversample neighbors for the minority class
     """
     samp_neighs = []
     samp_score_diff = []

@@ -7,6 +7,7 @@ import copy as cp
 from sklearn.metrics import f1_score, accuracy_score, recall_score, roc_auc_score, average_precision_score, confusion_matrix
 from collections import defaultdict
 from datetime import datetime
+import os
 
 
 """
@@ -14,28 +15,31 @@ from datetime import datetime
 """
 
 class log:
-	def __init__(self, config):
+	def __init__(self):
 		self.log_dir_path = "./log"
 		self.log_file_name = datetime.now().strftime("%Y-%m-%d %H:%M") + ".log"
-		self.train_log_path = os.path.join(self.log_dir_path, "train", log_file_name)
-		self.test_log_path = os.path.join(self.log_dir_path, "test", log_file_name)
-		self.multi_run_log_path = os.path.join(self.log_dir_path, "multi-run(total)", log_file_name)
-	
-	def write_train_log(line, print_line=True):
+		self.train_log_path = os.path.join(self.log_dir_path, "train", self.log_file_name)
+		self.test_log_path = os.path.join(self.log_dir_path, "test", self.log_file_name)
+		self.multi_run_log_path = os.path.join(self.log_dir_path, "multi-run(total)", self.log_file_name)
+		os.makedir(os.path.join(self.log_dir_path, "train"), exist_ok=True)
+		os.makedir(os.path.join(self.log_dir_path, "test"), exist_ok=True)
+		os.makedir(os.path.join(self.log_dir_path, "multiple-run"), exist_ok=True)
+
+	def write_train_log(self, line, print_line=True):
 		if print_line:
 			print(line)
 		log_file = open(self.train_log_path, 'a')
 		log_file.write(line + "\n")
 		log_file.close()
 
-	def write_test_log(line, print_line=True):
+	def write_test_log(self, line, print_line=True):
 		if print_line:
 			print(line)
 		log_file = open(self.test_log_path, 'a')
 		log_file.write(line + "\n")
 		log_file.close()
 	
-	def multi_run_log(line, print_line=True):
+	def multi_run_log(self, line, print_line=True):
 		if print_line:
 			print(line)
 		log_file = open(self.multi_run_log_path, 'a')
@@ -49,7 +53,7 @@ def load_data(data, prefix='data/'):
 	Load graph, feature, and label given dataset name
 	:returns: home and single-relation graphs, feature, label
 	"""
-
+	# yml 파일에 설정된 데이터셋(data_name)에 따라 label, feature, relation을 불러옴. 
 	if data == 'yelp':
 		data_file = loadmat(prefix + 'YelpChi.mat')
 		labels = data_file['label'].flatten()
@@ -67,6 +71,7 @@ def load_data(data, prefix='data/'):
 		with open(prefix + 'yelp_rsr_adjlists.pickle', 'rb') as file:
 			relation3 = pickle.load(file)
 		file.close()
+		relation_list = [relation1, relation2, relation3]
 	elif data == 'amazon':
 		data_file = loadmat(prefix + 'Amazon.mat')
 		labels = data_file['label'].flatten()
@@ -83,8 +88,10 @@ def load_data(data, prefix='data/'):
 		file.close()
 		with open(prefix + 'amz_uvu_adjlists.pickle', 'rb') as file:
 			relation3 = pickle.load(file)
+		file.close()
+		relation_list = [relation1, relation2, relation3]
 
-	return [homo, relation1, relation2, relation3], feat_data, labels
+	return homo, relation_list, feat_data, labels
 
 
 def normalize(mx):
@@ -100,26 +107,26 @@ def normalize(mx):
 	return mx
 
 
-def sparse_to_adjlist(sp_matrix, filename):
+def sparse_to_adjlist(sp_matrix, filename): # CSC 포멧의 인접행렬을 adjlist 형태로 변환하는 함수로 data_process.py에서 사용되는 함수.
 	"""
 	Transfer sparse matrix to adjacency list
 	:param sp_matrix: the sparse matrix
 	:param filename: the filename of adjlist
 	"""
 	# add self loop
-	homo_adj = sp_matrix + sp.eye(sp_matrix.shape[0])
+	homo_adj = sp_matrix + sp.eye(sp_matrix.shape[0]) 
 	# create adj_list
 	adj_lists = defaultdict(set)
-	edges = homo_adj.nonzero()
-	for index, node in enumerate(edges[0]):
+	edges = homo_adj.nonzero() # 해당 함수는 non-zero value를 갖는 인덱스 (row, col)을 리스트 퓨플로 반환한다.
+	for index, node in enumerate(edges[0]): 
 		adj_lists[node].add(edges[1][index])
-		adj_lists[edges[1][index]].add(node)
+		adj_lists[edges[1][index]].add(node) # symmetric relation을 커버하기 위한 코드.
 	with open(filename, 'wb') as file:
 		pickle.dump(adj_lists, file)
 	file.close()
 
 
-def pos_neg_split(nodes, labels):
+def pos_neg_split(nodes, labels): # label을 기준으로 positive와 netgative sample의 노드 번호를 반환하는 함수.
 	"""
 	Find positive and negative nodes given a list of nodes and their labels
 	:param nodes: a list of nodes
@@ -134,13 +141,13 @@ def pos_neg_split(nodes, labels):
 			pos_nodes.append(aux_nodes[idx])
 			neg_nodes.remove(aux_nodes[idx])
 
-	return pos_nodes, neg_nodes
+	return pos_nodes, neg_nodes # Positive와 netgative sample의 노드 인덱스를 반환 (전체 데이터셋으로부터의 인덱스가 기준이 됨.).
 
 
-def pick_step(idx_train, y_train, adj_list, size):
-    degree_train = [len(adj_list[node]) for node in idx_train]
-    lf_train = (y_train.sum()-len(y_train))*y_train + len(y_train)
-    smp_prob = np.array(degree_train) / lf_train
+def pick_step(idx_train, y_train, adj_list, size): # 논문에서 제안한 label balance sampler에 해당하는 함수.
+    degree_train = [len(adj_list[node]) for node in idx_train] # adj list (homo)를 통해 train 노드들의 차수를 리스트로 반환한다 (self loop 포함됨).
+    lf_train = (y_train.sum()-len(y_train))*y_train + len(y_train) 
+    smp_prob = np.array(degree_train) / lf_train # Sampling probability를 (P(v))를 구한다 (해당 노드의 label의 수와 차수의 비율로 설정하여 imbalance problem 완화함.).
     return random.choices(idx_train, weights=smp_prob, k=size)
 
 

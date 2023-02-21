@@ -21,13 +21,13 @@ if __name__ == "__main__":
 	sparse_to_adjlist(net_rsr, prefix + 'yelp_rsr_adjlists.pickle')
 	sparse_to_adjlist(yelp_homo, prefix + 'yelp_homo_adjlists.pickle')
 
-	# amz = loadmat('data/Amazon.mat')
-	# net_upu = amz['net_upu']
-	# net_usu = amz['net_usu']
-	# net_uvu = amz['net_uvu']
-	# amz_homo = amz['homo']
+	amz = loadmat('data/Amazon.mat')
+	net_upu = amz['net_upu']
+	net_usu = amz['net_usu']
+	net_uvu = amz['net_uvu']
+	amz_homo = amz['homo']
 
-	# sparse_to_adjlist(net_upu, prefix + 'amz_upu_adjlists.pickle')
-	# sparse_to_adjlist(net_usu, prefix + 'amz_usu_adjlists.pickle')
-	# sparse_to_adjlist(net_uvu, prefix + 'amz_uvu_adjlists.pickle')
-	# sparse_to_adjlist(amz_homo, prefix + 'amz_homo_adjlists.pickle')
+	sparse_to_adjlist(net_upu, prefix + 'amz_upu_adjlists.pickle')
+	sparse_to_adjlist(net_usu, prefix + 'amz_usu_adjlists.pickle')
+	sparse_to_adjlist(net_uvu, prefix + 'amz_uvu_adjlists.pickle')
+	sparse_to_adjlist(amz_homo, prefix + 'amz_homo_adjlists.pickle')

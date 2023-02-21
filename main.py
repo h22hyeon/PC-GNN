@@ -48,8 +48,8 @@ def multi_run_main(config):
         print('Running {}:\n'.format(i))
         for k in hyperparams:
             cnf['save_dir'] += '{}_{}_'.format(k, cnf[k]) # Seed에 따라 실험별 가중치를 저장할 수 있도록 한다.
-            ckp.write_train_log(config_lines + f"\nCurrent Seed: {cnf[k]}", print_line=False)
-            ckp.write_test_log(config_lines + f"\nCurrent Seed: {cnf[k]}", print_line=False)
+            ckp.write_train_log(line=config_lines + f"\nCurrent Seed: {cnf[k]}", print_line=False)
+            ckp.write_test_log(line=config_lines + f"\nCurrent Seed: {cnf[k]}", print_line=False)
         print(cnf['save_dir'])
         set_random_seed(cnf['seed'])
         st = time.time()
@@ -110,8 +110,8 @@ def print_config(config):
     for key in sorted(config.keys()):
         val = config[key]
         keystr = "{}".format(key) + (" " * (24 - len(key)))
-        line = "{} -->   {}".format(keystr, val)
-        config_lines += lines
+        line = "{} -->   {}\n".format(keystr, val)
+        config_lines += line
         print(line)
     print("**************** MODEL CONFIGURATION ****************")
     

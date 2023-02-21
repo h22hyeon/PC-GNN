@@ -22,21 +22,24 @@ class ModelHandler(object):
 
 	def __init__(self, config, ckp):
 		args = argparse.Namespace(**config)
-		# load graph, feature, and label
-		[homo, relation1, relation2, relation3], feat_data, labels = load_data(args.data_name, prefix=args.data_dir)
+		args.cuda = not args.no_cuda and torch.cuda.is_available()
+		os.environ["CUDA_VISIBLE_DEVICES"] = args.cuda_id
 
-		# train_test split
+		# load graph, feature, and label
+		homo, relation_list, feat_data, labels = load_data(args.data_name, prefix=args.data_dir) # KDK 데이터 셋에서 realation의 수가 달라질 수 있어 수정함.
+
+		# train/validation/test set 분할.
 		np.random.seed(args.seed)
 		random.seed(args.seed)
 		if args.data_name == 'yelp':
-			index = list(range(len(labels))) # Stratified sampling으로 train/validation/test를 구분한다.
+			index = list(range(len(labels))) # Stratified sampling을 통해 데이터셋을 train/validation/test set으로 분할한다.
 			idx_train, idx_rest, y_train, y_rest = train_test_split(index, labels, stratify=labels, train_size=args.train_ratio,
 																	random_state=2, shuffle=True)
 			idx_valid, idx_test, y_valid, y_test = train_test_split(idx_rest, y_rest, stratify=y_rest, test_size=args.test_ratio,
 																	random_state=2, shuffle=True)
 
-		elif args.data_name == 'amazon':  # amazon
-			# 0-3304 are unlabeled nodes
+		elif args.data_name == 'amazon':
+			# 0-3304 are unlabeled nodes (Unlabeled 노드는 학습과 검증 과정에서 제외함.)
 			index = list(range(3305, len(labels))) # Stratified sampling으로 train/validation/test를 구분한다.
 			idx_train, idx_rest, y_train, y_rest = train_test_split(index, labels[3305:], stratify=labels[3305:],
 																	train_size=args.train_ratio, random_state=2, shuffle=True)
@@ -52,21 +55,19 @@ class ModelHandler(object):
 		# split pos neg sets for under-sampling
 		train_pos, train_neg = pos_neg_split(idx_train, y_train)
 
-		
+		# Feature normalization 부분 코드.
 		# if args.data == 'amazon':
 		feat_data = normalize(feat_data)
 		# train_feats = feat_data[np.array(idx_train)]
 		# scaler = StandardScaler()
 		# scaler.fit(train_feats)
 		# feat_data = scaler.transform(feat_data)
-		args.cuda = not args.no_cuda and torch.cuda.is_available()
-		os.environ["CUDA_VISIBLE_DEVICES"] = args.cuda_id
 
 		# set input graph
 		if args.model == 'SAGE' or args.model == 'GCN':
 			adj_lists = homo
-		else:
-			adj_lists = [relation1, relation2, relation3]
+		else: # PC-GNN은 multi-relational graph를 이용함.
+			adj_lists = relation_list
 
 		print(f'Model: {args.model}, multi-relation aggregator: {args.multi_relation}, emb_size: {args.emb_size}.')
 		
@@ -80,17 +81,33 @@ class ModelHandler(object):
 
 	def train(self):
 		args = self.args
+		
+		# 클래스 변수로부터 feature, label, adj 생성한다.
 		feat_data, adj_lists = self.dataset['feat_data'], self.dataset['adj_lists']
 		idx_train, y_train = self.dataset['idx_train'], self.dataset['y_train']
 		idx_valid, y_valid, idx_test, y_test = self.dataset['idx_valid'], self.dataset['y_valid'], self.dataset['idx_test'], self.dataset['y_test']
+		
 		# initialize model input
 		features = nn.Embedding(feat_data.shape[0], feat_data.shape[1])
 		features.weight = nn.Parameter(torch.FloatTensor(feat_data), requires_grad=False)
 		if args.cuda:
 			features.cuda()
 
+		"""
+		논문의 choosse 과정 (IntraAgg layer 안에서 이루어짐.)
+
+		# 사용할 positive과 negative 비율을 유사하게 맞춰주기 위한 코드.
+		# Train positive set의 2배를 샘플링 하여 배치 구성에서 두 클래스의 비율을 유사하게 가져가려 함.
+		"""
 		# build one-layer models
-		if args.model == 'PCGNN':
+		if args.model == 'PCGNN' & args.data_name == "KDK":
+			intra1 = IntraAgg(features, feat_data.shape[1], args.emb_size, self.dataset['train_pos'], args.rho, cuda=args.cuda)
+			intra2 = IntraAgg(features, feat_data.shape[1], args.emb_size, self.dataset['train_pos'], args.rho, cuda=args.cuda)
+			intra3 = IntraAgg(features, feat_data.shape[1], args.emb_size, self.dataset['train_pos'], args.rho, cuda=args.cuda)
+			intra4 = IntraAgg(features, feat_data.shape[1], args.emb_size, self.dataset['train_pos'], args.rho, cuda=args.cuda)
+			intra5 = IntraAgg(features, feat_data.shape[1], args.emb_size, self.dataset['train_pos'], args.rho, cuda=args.cuda)
+			inter1 = InterAgg(features, feat_data.shape[1], args.emb_size, self.dataset['train_pos'], adj_lists, [intra1, intra2, intra3, intra4, intra5], inter=args.multi_relation, cuda=args.cuda)
+		elif args.model == 'PCGNN' & args.data_name != "KDK":
 			intra1 = IntraAgg(features, feat_data.shape[1], args.emb_size, self.dataset['train_pos'], args.rho, cuda=args.cuda)
 			intra2 = IntraAgg(features, feat_data.shape[1], args.emb_size, self.dataset['train_pos'], args.rho, cuda=args.cuda)
 			intra3 = IntraAgg(features, feat_data.shape[1], args.emb_size, self.dataset['train_pos'], args.rho, cuda=args.cuda)
@@ -104,7 +121,7 @@ class ModelHandler(object):
 			enc_gcn = GCNEncoder(features, feat_data.shape[1], args.emb_size, adj_lists, agg_gcn, gcn=True, cuda=args.cuda)
 
 		if args.model == 'PCGNN':
-			gnn_model = PCALayer(2, inter1, args.alpha)
+			gnn_model = PCALayer(2, inter1, args.alpha) # 앞서 정의한 inter/intra aggregator를 이용하여 PCGNN 모델을 생성함.
 		elif args.model == 'SAGE':
 			# the vanilla GraphSAGE model as baseline
 			enc_sage.num_samples = 5
@@ -119,26 +136,31 @@ class ModelHandler(object):
 
 		timestamp = time.time()
 		timestamp = datetime.datetime.fromtimestamp(int(timestamp)).strftime('%Y-%m-%d %H-%M-%S')
-		dir_saver = args.save_dir+timestamp
+		dir_saver = os.paht.join(args.save_dir, timestamp)
+		os.makedirs(dir_saver,exist_ok=True)
 		path_saver = os.path.join(dir_saver, '{}_{}.pkl'.format(args.data_name, args.model))
 		f1_mac_best, auc_best, ep_best = 0, 0, -1
 
 		# train the model
 		for epoch in range(args.num_epochs):
-			sampled_idx_train = pick_step(idx_train, y_train, self.dataset['homo'], size=len(self.dataset['train_pos'])*2)
-			
-			random.shuffle(sampled_idx_train)
+			"""
+			논문의 pick 과정
 
+			# 사용할 positive과 negative 비율을 유사하게 맞춰주기 위한 코드.
+			# Train positive set의 2배를 샘플링 하여 배치 구성에서 두 클래스의 비율을 유사하게 가져가려 함.
+			"""
+			sampled_idx_train = pick_step(idx_train, y_train, self.dataset['homo'], size=len(self.dataset['train_pos'])*2) 
+			random.shuffle(sampled_idx_train)
 			num_batches = int(len(sampled_idx_train) / args.batch_size) + 1
 
 			loss = 0.0
 			epoch_time = 0
-
 			# mini-batch training
 			for batch in range(num_batches):
 				start_time = time.time()
 				i_start = batch * args.batch_size
 				i_end = min((batch + 1) * args.batch_size, len(sampled_idx_train))
+
 				batch_nodes = sampled_idx_train[i_start:i_end]
 				batch_label = self.dataset['labels'][np.array(batch_nodes)]
 				optimizer.zero_grad()
