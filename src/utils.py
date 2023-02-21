@@ -231,9 +231,12 @@ def test_pcgnn(test_cases, labels, model, batch_size, thres=0.5):
 		i_end = min((iteration + 1) * batch_size, len(test_cases))
 		batch_nodes = test_cases[i_start:i_end]
 		batch_label = labels[i_start:i_end]
+
+		# 학습된 PC-GNN 모델을 통해 반환되는 GNN score와 label-aware score를 통해 성능 평가를 수행한다.
 		gnn_prob, label_prob1 = model.to_prob(batch_nodes, batch_label, train_flag=False)
 
 		gnn_prob_arr = gnn_prob.data.cpu().numpy()[:, 1]
+		# 다른 모델들과 다르게 threshold를 정해두고 accuracy를 함께 측정한다 (보통은 AUC-ROC만을 게산한다.).
 		gnn_pred = prob2pred(gnn_prob_arr, thres)
 
 		f1_label1 += f1_score(batch_label, label_prob1.data.cpu().numpy().argmax(axis=1), average="macro")
@@ -243,11 +246,14 @@ def test_pcgnn(test_cases, labels, model, batch_size, thres=0.5):
 		gnn_pred_list.extend(gnn_pred.tolist())
 		gnn_prob_list.extend(gnn_prob_arr.tolist())
 		label_list1.extend(label_prob1.data.cpu().numpy()[:, 1].tolist())
-
-	auc_gnn = roc_auc_score(labels, np.array(gnn_prob_list))
-	ap_gnn = average_precision_score(labels, np.array(gnn_prob_list))
+	
+	"""label aware score를 통한 성능 평가"""
 	auc_label1 = roc_auc_score(labels, np.array(label_list1))
 	ap_label1 = average_precision_score(labels, np.array(label_list1))
+	
+	"""GNN score를 통한 성능 평가"""
+	auc_gnn = roc_auc_score(labels, np.array(gnn_prob_list))
+	ap_gnn = average_precision_score(labels, np.array(gnn_prob_list))
 
 	f1_binary_1_gnn = f1_score(labels, np.array(gnn_pred_list), pos_label=1, average='binary')
 	f1_binary_0_gnn = f1_score(labels, np.array(gnn_pred_list), pos_label=0, average='binary')

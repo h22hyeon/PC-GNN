@@ -100,14 +100,14 @@ class ModelHandler(object):
 		# Train positive set의 2배를 샘플링 하여 배치 구성에서 두 클래스의 비율을 유사하게 가져가려 함.
 		"""
 		# build one-layer models
-		if args.model == 'PCGNN' & args.data_name == "KDK":
+		if args.model == 'PCGNN' and args.data_name == "데이터!!":
 			intra1 = IntraAgg(features, feat_data.shape[1], args.emb_size, self.dataset['train_pos'], args.rho, cuda=args.cuda)
 			intra2 = IntraAgg(features, feat_data.shape[1], args.emb_size, self.dataset['train_pos'], args.rho, cuda=args.cuda)
 			intra3 = IntraAgg(features, feat_data.shape[1], args.emb_size, self.dataset['train_pos'], args.rho, cuda=args.cuda)
 			intra4 = IntraAgg(features, feat_data.shape[1], args.emb_size, self.dataset['train_pos'], args.rho, cuda=args.cuda)
 			intra5 = IntraAgg(features, feat_data.shape[1], args.emb_size, self.dataset['train_pos'], args.rho, cuda=args.cuda)
 			inter1 = InterAgg(features, feat_data.shape[1], args.emb_size, self.dataset['train_pos'], adj_lists, [intra1, intra2, intra3, intra4, intra5], inter=args.multi_relation, cuda=args.cuda)
-		elif args.model == 'PCGNN' & args.data_name != "KDK":
+		elif args.model == 'PCGNN':
 			intra1 = IntraAgg(features, feat_data.shape[1], args.emb_size, self.dataset['train_pos'], args.rho, cuda=args.cuda)
 			intra2 = IntraAgg(features, feat_data.shape[1], args.emb_size, self.dataset['train_pos'], args.rho, cuda=args.cuda)
 			intra3 = IntraAgg(features, feat_data.shape[1], args.emb_size, self.dataset['train_pos'], args.rho, cuda=args.cuda)
@@ -156,6 +156,9 @@ class ModelHandler(object):
 			loss = 0.0
 			epoch_time = 0
 			# mini-batch training
+			"""
+			자세한 학습 알고리즘은 layers.py를 통해 확인할 수 있다. 
+			"""
 			for batch in range(num_batches):
 				start_time = time.time()
 				i_start = batch * args.batch_size
@@ -177,6 +180,9 @@ class ModelHandler(object):
 			train_line = f'Epoch: {epoch}, loss: {loss.item() / num_batches}, time: {epoch_time}s'
 			self.ckp.write_train_log(train_line)
 
+			"""
+			Test 과정에 대한 알고리즘은 utils.py에서 확인할 수 있다.
+			"""
 			# Valid the model for every $valid_epoch$ epoch
 			if epoch % args.valid_epochs == 0:
 				if args.model == 'SAGE' or args.model == 'GCN':
@@ -188,6 +194,7 @@ class ModelHandler(object):
 							os.makedirs(dir_saver)
 						print('  Saving model ...')
 						torch.save(gnn_model.state_dict(), path_saver)
+				# PC-GNN을 학습할 경우의 test!
 				else:
 					print("Valid at epoch {}".format(epoch))
 					f1_mac_val, f1_1_val, f1_0_val, auc_val, gmean_val = test_pcgnn(idx_valid, y_valid, gnn_model, args.batch_size, args.thres)
