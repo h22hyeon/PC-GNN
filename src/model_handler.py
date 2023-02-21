@@ -136,7 +136,7 @@ class ModelHandler(object):
 
 		timestamp = time.time()
 		timestamp = datetime.datetime.fromtimestamp(int(timestamp)).strftime('%Y-%m-%d %H-%M-%S')
-		dir_saver = os.paht.join(args.save_dir, timestamp)
+		dir_saver = os.path.join(args.save_dir, timestamp)
 		os.makedirs(dir_saver,exist_ok=True)
 		path_saver = os.path.join(dir_saver, '{}_{}.pkl'.format(args.data_name, args.model))
 		f1_mac_best, auc_best, ep_best = 0, 0, -1

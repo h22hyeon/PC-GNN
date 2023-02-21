@@ -21,9 +21,9 @@ class log:
 		self.train_log_path = os.path.join(self.log_dir_path, "train", self.log_file_name)
 		self.test_log_path = os.path.join(self.log_dir_path, "test", self.log_file_name)
 		self.multi_run_log_path = os.path.join(self.log_dir_path, "multi-run(total)", self.log_file_name)
-		os.makedir(os.path.join(self.log_dir_path, "train"), exist_ok=True)
-		os.makedir(os.path.join(self.log_dir_path, "test"), exist_ok=True)
-		os.makedir(os.path.join(self.log_dir_path, "multiple-run"), exist_ok=True)
+		os.makedirs(os.path.join(self.log_dir_path, "train"), exist_ok=True)
+		os.makedirs(os.path.join(self.log_dir_path, "test"), exist_ok=True)
+		os.makedirs(os.path.join(self.log_dir_path, "multiple-run"), exist_ok=True)
 
 	def write_train_log(self, line, print_line=True):
 		if print_line:
