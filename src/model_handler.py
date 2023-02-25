@@ -21,6 +21,7 @@ from src.graphsage import *
 class ModelHandler(object):
 
 	def __init__(self, config, ckp):
+		self.ckp = ckp
 		args = argparse.Namespace(**config)
 		args.cuda = not args.no_cuda and torch.cuda.is_available()
 		os.environ["CUDA_VISIBLE_DEVICES"] = args.cuda_id
@@ -134,9 +135,7 @@ class ModelHandler(object):
 
 		optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, gnn_model.parameters()), lr=args.lr, weight_decay=args.weight_decay)
 
-		timestamp = time.time()
-		timestamp = datetime.datetime.fromtimestamp(int(timestamp)).strftime('%Y-%m-%d %H-%M-%S')
-		dir_saver = os.path.join(args.save_dir, timestamp)
+		dir_saver = os.path.join("/data/PC-GNN_models/", self.ckp.log_file_name)
 		os.makedirs(dir_saver,exist_ok=True)
 		path_saver = os.path.join(dir_saver, '{}_{}.pkl'.format(args.data_name, args.model))
 		f1_mac_best, auc_best, ep_best = 0, 0, -1
@@ -187,9 +186,9 @@ class ModelHandler(object):
 			if epoch % args.valid_epochs == 0:
 				if args.model == 'SAGE' or args.model == 'GCN':
 					print("Valid at epoch {}".format(epoch))
-					f1_mac_val, f1_1_val, f1_0_val, auc_val, gmean_val = test_sage(idx_valid, y_valid, gnn_model, args.batch_size, args.thres)
-					if auc_val > auc_best:
-						f1_mac_best, auc_best, ep_best = f1_mac_val, auc_val, epoch
+					gnn_auc_val, gnn_recall_val, gnn_f1_val = test_sage(idx_test, y_test, gnn_model, args.batch_size, self.ckp, flag="val")
+					if gnn_auc_val > auc_best:
+						gnn_recall_best, f1_mac_best, auc_best, ep_best = gnn_recall_val, gnn_f1_val, gnn_auc_val, epoch
 						if not os.path.exists(dir_saver):
 							os.makedirs(dir_saver)
 						print('  Saving model ...')
@@ -197,9 +196,9 @@ class ModelHandler(object):
 				# PC-GNN을 학습할 경우의 test!
 				else:
 					print("Valid at epoch {}".format(epoch))
-					f1_mac_val, f1_1_val, f1_0_val, auc_val, gmean_val = test_pcgnn(idx_valid, y_valid, gnn_model, args.batch_size, args.thres)
-					if auc_val > auc_best:
-						f1_mac_best, auc_best, ep_best = f1_mac_val, auc_val, epoch
+					gnn_auc_val, gnn_recall_val, gnn_f1_val = test_pcgnn(idx_test, y_test, gnn_model, args.batch_size, self.ckp, flag="val")
+					if gnn_auc_val > auc_best:
+						gnn_recall_best, f1_mac_best, auc_best, ep_best = gnn_recall_val, gnn_f1_val, gnn_auc_val, epoch
 						if not os.path.exists(dir_saver):
 							os.makedirs(dir_saver)
 						print('  Saving model ...')
@@ -209,7 +208,7 @@ class ModelHandler(object):
 		print("Model path: {}".format(path_saver))
 		gnn_model.load_state_dict(torch.load(path_saver))
 		if args.model == 'SAGE' or args.model == 'GCN':
-			f1_mac_test, f1_1_test, f1_0_test, auc_test, gmean_test = test_sage(idx_test, y_test, gnn_model, args.batch_size, args.thres)
+			gnn_auc, gnn_recall, gnn_f1 = test_sage(idx_test, y_test, gnn_model, args.batch_size, self.ckp, flag="test")
 		else:
-			f1_mac_test, f1_1_test, f1_0_test, auc_test, gmean_test = test_pcgnn(idx_test, y_test, gnn_model, args.batch_size, args.thres)
-		return f1_mac_test, f1_1_test, f1_0_test, auc_test, gmean_test
+			gnn_auc, gnn_recall, gnn_f1 = test_pcgnn(idx_test, y_test, gnn_model, args.batch_size, self.ckp, flag="test")
+		return gnn_auc, gnn_recall, gnn_f1

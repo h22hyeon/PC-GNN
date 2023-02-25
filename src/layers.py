@@ -145,7 +145,7 @@ class InterAgg(nn.Module):
 		"""
 		combined = F.relu(cat_feats.mm(self.weight).t()) # intra-aggregated embeddings이다!
 
-		return combined, center_scores # 통합된 embedding과 배치의 각 노드에 대한 label-aware score(어디에 쓰이는지..?)를 반환한다.
+		return combined, center_scores # 통합된 embedding과 배치의 각 노드에 대한 label-aware score(어디에 쓰이는지..? -> latent space로 투영하는 가중치의 학습을 위해)를 반환한다.
 
 
 class IntraAgg(nn.Module):
@@ -211,8 +211,9 @@ class IntraAgg(nn.Module):
 		mask = Variable(torch.zeros(len(samp_neighs), len(unique_nodes)))
 		# 배치의 각 노드에 대한 이웃 노드들에 차례로 접근하여 인덱스를 부여한다.
 		# (이때 모든 배치의 노드에 대해 하나의 리스트로 결과가 생성한다. -> column_indices)
+		# 타겟 노드의 이웃 노드의 인덱스를 하나의 리스트로 통합하여 column_indices로 정의한다.
 		column_indices = [unique_nodes[n] for samp_neigh in samp_neighs for n in samp_neigh]
-		# (이웃 노드의 인덱스가 몇 번째 타겟 노드의 것인지를 지정하기 위한 row_indices를 생성한다.)
+		# column_indices로에서 이웃 노드의 인덱스가 몇 번째 타겟 노드의 것인지를 지정하기 위한 row_indices를 생성한다.
 		row_indices = [i for i in range(len(samp_neighs)) for _ in range(len(samp_neighs[i]))]
 		# mask의 row는 타겟 노드의 인덱스를 의미하고, column은 이웃 노드의 인덱스를 의미한다.
 		# 배치 단위에서의 adj라고 보면 될 것 같다. 
@@ -261,9 +262,10 @@ def choose_step_neighs(center_scores, center_labels, neigh_scores, neighs_list, 
         neigh_score = neigh_scores[idx][:, 0].view(-1, 1) # 타겟 노드의 이웃 노드들의 label-aware score [0]
         center_score_neigh = center_score.repeat(neigh_score.size()[0], 1) # 이웃 노드의 수 만큼 타겟 노드의 label-aware score를 확장한다.
         neighs_indices = neighs_list[idx] # 이웃 노드의 인덱스를 neighs_indices로 저장한다.
-        num_sample = sample_list[idx] # 이용할 노드의 수를 num_sample로 저장한다.
+        num_sample = sample_list[idx] # 타겟 노드에 대하여 message를 이용할 이웃 노드의 수를 num_sample로 저장한다.
 
         # compute the L1-distance of batch nodes and their neighbors
+		# 각 타겟 노드에 대하여 이웃 노드와의 labe-aware score를 게산하여 score_diff로 정의 한다.
         score_diff_neigh = torch.abs(center_score_neigh - neigh_score).squeeze() # 이웃 노드들과 score diff를 계산하고, 이를 정렬한다. 
         sorted_score_diff_neigh, sorted_neigh_indices = torch.sort(score_diff_neigh, dim=0, descending=False)
         selected_neigh_indices = sorted_neigh_indices.tolist() # 
@@ -275,7 +277,7 @@ def choose_step_neighs(center_scores, center_labels, neigh_scores, neighs_list, 
 	    	# 선택된 이웃 노드들과 타겟 노드와의 score 차이를  selected_score_diff로 정의한다.
             selected_score_diff = sorted_score_diff_neigh.tolist()[:num_sample]
         else:
-			# 이웃 노드가 1개 혹은 singleton 노드일 경우
+			# 타겟 노드의 이웃 노드가 1개 혹은 singleton 노드일 경우
             selected_neighs = neighs_indices
             selected_score_diff = score_diff_neigh.tolist()
             if isinstance(selected_score_diff, float):
@@ -300,7 +302,7 @@ def choose_step_neighs(center_scores, center_labels, neigh_scores, neighs_list, 
         samp_neighs.append(set(selected_neighs))
         samp_score_diff.append(selected_score_diff)
 
-    return samp_neighs, samp_score_diff # 배치에 존재하는 각 노드들의 이웃과 그들의 score diff를 반환한다.
+    return samp_neighs, samp_score_diff # 배치에 존재하는 각 노드들의 이웃의 인덱스와 그들의 score diff를 반환한다.
 
 
 def choose_step_test(center_scores, neigh_scores, neighs_list, sample_list):

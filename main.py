@@ -22,15 +22,16 @@ def main(config):
     ckp = log()
     config_lines = print_config(config)
     ckp.write_train_log(config_lines, print_line=False)
+    ckp.write_valid_log(config_lines, print_line=False)
     ckp.write_test_log(config_lines, print_line=False)
 
     set_random_seed(config['seed']) # 실험에 사용된 seed를 가중치 이름에 넣어 저장되도록 한다.
     model = ModelHandler(config, ckp)
-    f1_mac_test, f1_1_test, f1_0_test, auc_test, gmean_test = model.train()
+    gnn_auc, gnn_recall, gnn_f1 = model.train()
     
-    ckp.write_test_log("F1-Macro: {}".format(f1_mac_test))
-    ckp.write_test_log("AUC: {}".format(auc_test))
-    ckp.write_test_log("G-Mean: {}".format(gmean_test))
+    ckp.write_test_log("F1-Macro: {}".format(gnn_f1))
+    ckp.write_test_log("AUC: {}".format(gnn_auc))
+    ckp.write_test_log("Recall: {}".format(gnn_recall))
 
 
 def multi_run_main(config):
@@ -40,50 +41,45 @@ def multi_run_main(config):
         if isinstance(v, list): # Multiple run일 경우 해당 실험에 사용된 seed를 기록한다.
             hyperparams.append(k)
 
-    f1_list, f1_1_list, f1_0_list, auc_list, gmean_list = [], [], [], [], []
+    f1_list, auc_list, recall_list = [], [], []
     # configuration 오브젝트들을 튜플로 저장한다.
     configs = grid(config)
+    ckp = log()
     for i, cnf in enumerate(configs):
-        ckp = log()
         print('Running {}:\n'.format(i))
         for k in hyperparams:
             cnf['save_dir'] += '{}_{}_'.format(k, cnf[k]) # Seed에 따라 실험별 가중치를 저장할 수 있도록 한다.
             ckp.write_train_log(line=config_lines + f"\nCurrent Seed: {cnf[k]}", print_line=False)
+            ckp.write_valid_log(line=config_lines + f"\nCurrent Seed: {cnf[k]}", print_line=False)
             ckp.write_test_log(line=config_lines + f"\nCurrent Seed: {cnf[k]}", print_line=False)
         print(cnf['save_dir'])
         set_random_seed(cnf['seed'])
         st = time.time()
         model = ModelHandler(cnf, ckp)
-        # AUC-ROC / Gmean을 기록한다.
-        f1_mac_test, f1_1_test, f1_0_test, auc_test, gmean_test = model.train()
-        ckp.write_test_log("F1-Macro: {}".format(f1_mac_test))
-        ckp.write_test_log("AUC: {}".format(auc_test))
-        ckp.write_test_log("G-Mean: {}".format(gmean_test))
-        f1_list.append(f1_mac_test)
-        f1_1_list.append(f1_1_test)
-        f1_0_list.append(f1_0_test)
-        auc_list.append(auc_test)
-        gmean_list.append(gmean_test)
+        # AUC-ROC / Recall / F1-macro를 기록한다.
+        gnn_auc, gnn_recall, gnn_f1 = model.train()
+        ckp.write_test_log("F1-Macro: {}".format(gnn_f1))
+        ckp.write_test_log("AUC: {}".format(gnn_auc))
+        ckp.write_test_log("Recall: {}".format(gnn_recall))
+
+        f1_list.append(gnn_f1)
+        auc_list.append(gnn_auc)
+        recall_list.append(gnn_recall)
         print("Running {} done, elapsed time {}s".format(i, time.time()-st))
     
-    ckp2 = log()
-    ckp2.multi_run_log(config_lines)
-    ckp2.multi_run_log("F1-Macro: {}".format(f1_list))
-    ckp2.multi_run_log("AUC: {}".format(auc_list))
-    ckp2.multi_run_log("G-Mean: {}".format(gmean_list))
+    ckp.multi_run_log(config_lines)
+    ckp.multi_run_log("F1-Macro: {}".format(f1_list))
+    ckp.multi_run_log("AUC: {}".format(auc_list))
+    ckp.multi_run_log("Recall: {}".format(recall_list))
 
     # 기록된 AUC-ROC / Gmean의 평균을 계산하도록 한다.
     f1_mean, f1_std = np.mean(f1_list), np.std(f1_list, ddof=1)
-    f1_1_mean, f1_1_std = np.mean(f1_1_list), np.std(f1_1_list, ddof=1)
-    f1_0_mean, f1_0_std = np.mean(f1_0_list), np.std(f1_0_list, ddof=1)
     auc_mean, auc_std = np.mean(auc_list), np.std(auc_list, ddof=1)
-    gmean_mean, gmean_std = np.mean(gmean_list), np.std(gmean_list, ddof=1)
+    recall_mean, recall_std = np.mean(recall_list), np.std(recall_list, ddof=1)
 
-    ckp2.multi_run_log("F1-Macro: {}+{}".format(f1_mean, f1_std))
-    ckp2.multi_run_log("F1-binary-1: {}+{}".format(f1_1_mean, f1_1_std))
-    ckp2.multi_run_log("F1-binary-0: {}+{}".format(f1_0_mean, f1_0_std))
-    ckp2.multi_run_log("AUC: {}+{}".format(auc_mean, auc_std))
-    ckp2.multi_run_log("G-Mean: {}+{}".format(gmean_mean, gmean_std))
+    ckp.multi_run_log("Total - F1-Macro: {}+{}".format(f1_mean, f1_std))
+    ckp.multi_run_log("Total - AUC: {}+{}".format(auc_mean, auc_std))
+    ckp.multi_run_log("Total - Recall: {}+{}".format(recall_mean, recall_std))
 
 
 
