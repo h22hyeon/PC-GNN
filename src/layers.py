@@ -330,11 +330,11 @@ class IntraAgg(nn.Module):
 		# shape 정리
 		# nodes: [B,] -> node_idx
 		# batch_labels : [B,] -> 0, 1
-		# to_neighs_list : [B,] -> [neighbor1_idx, neighbor2_idx, ...]
+		# to_neighs_list : [B,] -> row = [neighbor1_idx, neighbor2_idx, ...]
 		# batch_scores : [B, 2] -> scores
-		# neigh_scores: [B,] -> [scores of neighbor1, scores of neighbor2, ...]
+		# neigh_scores: [B,] -> row = [scores of neighbor1, scores of neighbor2, ...]
 		# pos_scores : [# of pos, 2] -> 
-		# sample_list: [B,] -> threshold * k
+		# sample_list: [B,] -> row = threshold * k
 
 		:return | to_feats: the aggregated embeddings of batch nodes neighbors in one relation
 		:return | samp_scores: the average neighbor distances for each relation after filtering
@@ -430,20 +430,20 @@ def choose_step_neighs(center_scores, center_labels, neigh_scores, neighs_list, 
 
 		# 타겟 노드가 fraud일 경우
         if center_labels[idx] == 1:
-			# over sampling의 비율은 하이퍼 파라미터이다.
+	    # over sampling의 비율은 하이퍼 파라미터이다.
             num_oversample = int(num_sample * sample_rate)
-	    	# Positive sample의 label-aware score와 비교하기 위해 타겟 노드의 label-aware score를 확장한다.
+	    # Positive sample의 label-aware score와 비교하기 위해 타겟 노드의 label-aware score를 확장한다.
             center_score_minor = center_score.repeat(minor_scores.size()[0], 1)
-	    	# 타겟 노드와 positive sample의 score diff를 계산한다.
+	    # 타겟 노드와 positive sample의 score diff를 계산한다.
             score_diff_minor = torch.abs(center_score_minor - minor_scores[:, 0].view(-1, 1)).squeeze()
-	    	# 마찬가지로 위 score diff와 인덱스를 정렬한다.
+	    # 마찬가지로 위 score diff와 인덱스를 정렬한다.
             sorted_score_diff_minor, sorted_minor_indices = torch.sort(score_diff_minor, dim=0, descending=False)
             selected_minor_indices = sorted_minor_indices.tolist()
-	    	# over sampling된 positive sample을 이웃 노드로 추가한다.
+	    # over sampling된 positive sample을 이웃 노드로 추가한다.
             selected_neighs.extend([minor_list[n] for n in selected_minor_indices[:num_oversample]])
             selected_score_diff.extend(sorted_score_diff_minor.tolist()[:num_oversample])
 
-		# 노드들의 선택된 neighbor와 그들의 score diff를 저장한다. 
+	# 노드들의 선택된 neighbor와 그들의 score diff를 저장한다. 
         samp_neighs.append(set(selected_neighs))
         samp_score_diff.append(selected_score_diff)
 

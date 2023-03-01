@@ -93,15 +93,15 @@ def get_config(config_path="config.yml"):
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-config', '--config', required=True, type=str, help='path to the config file')
+    # parser.add_argument('-config', '--config', required=True, type=str, help='path to the config file')
     parser.add_argument('--multi_run', action='store_true', help='flag: multi run')
     parser.add_argument('--data_name', type=str, default='KDK', help='random seed')
     parser.add_argument('--data_dir', type=str, default='/data/graphs_v3', help='random seed')
     parser.add_argument('--model', type=str, default='PCGNN', help='random seed')
     parser.add_argument('--multi_relation', type=str, default='GNN', help='random seed')
     parser.add_argument('--train_ratio', type=float, default=0.4, help='random seed')
-    parser.add_argument('--test_ratio', type=int, default=717, help='random seed')
-    parser.add_argument('--emb_size', type=int, default=717, help='random seed')
+    parser.add_argument('--test_ratio', type=float, default=0.67, help='random seed')
+    parser.add_argument('--emb_size', type=int, default=64, help='random seed')
     parser.add_argument('--thres', type=float, default=0.5, help='random seed')
     parser.add_argument('--rho', type=float, default=0.5, help='random seed')
     parser.add_argument('--seed', type=int, default=72, help='random seed')
@@ -110,10 +110,11 @@ def get_args():
     parser.add_argument('--weight_decay', type=float, default=0.001, help='random seed')
     parser.add_argument('--batch_size', type=int, default=1024, help='random seed')
     parser.add_argument('--num_epochs', type=int, default=201, help='random seed')
+    parser.add_argument('--valid_epochs', type=int, default=1, help='random seed')
     parser.add_argument('--alpha', type=int, default=2, help='random seed')
     parser.add_argument('--graph_id', type=int, default=0, help='random seed')
-    parser.add_argument('--no_cuda', type=bool, default=True, help='random seed')
-    parser.add_argument('--cuda_id', type=str, default='2', help='random seed')
+    parser.add_argument('--no_cuda', type=bool, default=False, help='random seed')
+    parser.add_argument('--cuda_id', type=str, default='0', help='random seed')
     args = vars(parser.parse_args())
     return args
 
