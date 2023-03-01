@@ -114,7 +114,7 @@ def get_args():
     parser.add_argument('--alpha', type=int, default=2, help='random seed')
     parser.add_argument('--graph_id', type=int, default=0, help='random seed')
     parser.add_argument('--no_cuda', type=bool, default=False, help='random seed')
-    parser.add_argument('--cuda_id', type=str, default='0', help='random seed')
+    parser.add_argument('--cuda_id', type=int, default=0, help='random seed')
     args = vars(parser.parse_args())
     return args
 

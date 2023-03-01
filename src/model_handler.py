@@ -24,7 +24,10 @@ class ModelHandler(object):
 		self.ckp = ckp
 		args = argparse.Namespace(**config)
 		args.cuda = not args.no_cuda and torch.cuda.is_available()
-		os.environ["CUDA_VISIBLE_DEVICES"] = args.cuda_id
+
+		# 인덱싱이 잘 안되는 오류 발생해서 교체함 : os.environ["CUDA_VISIBLE_DEVICES"] = args.cuda_id
+		device = torch.device(f'cuda:{args.cuda_id}' if torch.cuda.is_available() else 'cpu')
+		torch.cuda.set_device(device)
 
 		# load graph, feature, and label
 		homo, relation_list, feat_data, labels = load_data(args.data_name, prefix=args.data_dir, graph_id=args.graph_id) # KDK 데이터 셋에서 realation의 수가 달라질 수 있어 수정함.
