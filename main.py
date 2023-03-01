@@ -19,7 +19,7 @@ def set_random_seed(seed):
 
 
 def main(config):
-    ckp = log(config['model_name'])
+    ckp = log(config['model'])
     config_lines = print_config(config)
     ckp.write_train_log(config_lines, print_line=False)
     ckp.write_valid_log(config_lines, print_line=False)
@@ -44,7 +44,7 @@ def multi_run_main(config):
     f1_list, auc_list, recall_list = [], [], []
     # configuration 오브젝트들을 튜플로 저장한다.
     configs = grid(config)
-    ckp = log()
+    ckp = log(config['model'])
     for i, cnf in enumerate(configs):
         print('Running {}:\n'.format(i))
         for k in hyperparams:
@@ -178,8 +178,8 @@ def grid(kwargs):
 if __name__ == '__main__':
     cfg = get_args()
     # config 파서에 해당하는 configuration 파일의 오브젝트들을 튜플로 반환한다.
-    config = get_config(cfg['config'])
+    # config = get_config(cfg['config'])
     if cfg['multi_run']:
-        multi_run_main(config)
+        multi_run_main(cfg)
     else:
-        main(config)
+        main(cfg)
