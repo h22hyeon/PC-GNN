@@ -3,7 +3,7 @@ data_name: 'yelp'
 data_dir: './data/'
 train_ratio: 0.4
 test_ratio: 0.67
-save_dir: './pytorch_models/'
+save_dir: "/data/PC-GNN_models/"
 
 # Model
 model: 'PCGNN'
@@ -38,11 +38,11 @@ optimizer: 'adam'
 lr: 0.01 
 weight_decay: 0.001
 batch_size: 1024
-num_epochs: 51
+num_epochs: 101
 valid_epochs: 5
 alpha: 2
 
 
 # Device
-no_cuda: True
+no_cuda: False
 cuda_id: '2'

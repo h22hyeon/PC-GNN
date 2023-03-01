@@ -32,7 +32,7 @@ class ModelHandler(object):
 		# train/validation/test set 분할.
 		np.random.seed(args.seed)
 		random.seed(args.seed)
-		if args.data_name == 'yelp':
+		if args.data_name == 'yelp' or args.data_name == 'KDK':
 			index = list(range(len(labels))) # Stratified sampling을 통해 데이터셋을 train/validation/test set으로 분할한다.
 			idx_train, idx_rest, y_train, y_rest = train_test_split(index, labels, stratify=labels, train_size=args.train_ratio,
 																	random_state=2, shuffle=True)

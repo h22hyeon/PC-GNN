@@ -1,6 +1,7 @@
 import pickle
 import random
 import numpy as np
+import scipy.sparse
 import scipy.sparse as sp
 from scipy.io import loadmat
 import copy as cp
@@ -57,7 +58,7 @@ class log:
 
 
 
-def load_data(data, prefix='data/'):
+def load_data(data, prefix='data/', graph_id=None):
 	"""
 	Load graph, feature, and label given dataset name
 	:returns: home and single-relation graphs, feature, label
@@ -99,6 +100,27 @@ def load_data(data, prefix='data/'):
 			relation3 = pickle.load(file)
 		file.close()
 		relation_list = [relation1, relation2, relation3]
+	elif data == 'KDK':
+		homo = None
+		path = "/data/graphs_v3"
+		postfix = "(CSC).npz"
+
+		graph_num = str(graph_id).zfill(3)
+		feature_path = os.path.join(path, "attributes", graph_num + "_node_feature" + postfix)
+		label_path = os.path.join(path, "labels", graph_num + "_label.npy")
+
+		labels = np.load(label_path).flatten()
+		feat_data = scipy.sparse.load_npz(feature_path).astype(float).todense().A
+
+		network_dir_path_hetero = os.path.join(path, "G0_Hetero")
+		network_type_list = ["_c_acc_c_network", "_c_clcare_c_network", "_c_fp_c_network",
+						 "_c_hsdrcare_c_network","_c_insr_c_network"]
+		network_path_list = [os.path.join(network_dir_path_hetero, graph_num + network_type_list[i] + postfix) for i in range(len(network_type_list))]
+
+		relation_list = [scipy.sparse.load_npz(network_path_list[i]) for i in range(len(network_path_list))]
+
+		for i, relation in enumerate(relation_list):
+			relation_list[i] = relation + sp.eye(relation.shape[0])
 
 	return homo, relation_list, feat_data, labels
 
