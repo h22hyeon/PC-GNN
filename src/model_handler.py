@@ -101,7 +101,7 @@ class ModelHandler(object):
 		# Train positive set의 2배를 샘플링 하여 배치 구성에서 두 클래스의 비율을 유사하게 가져가려 함.
 		"""
 		# build one-layer models
-		if args.model == 'PCGNN' and args.data_name == "데이터!!":
+		if args.model == 'PCGNN' and args.data_name == "KDK":
 			intra1 = IntraAgg(features, feat_data.shape[1], args.emb_size, self.dataset['train_pos'], args.rho, cuda=args.cuda)
 			intra2 = IntraAgg(features, feat_data.shape[1], args.emb_size, self.dataset['train_pos'], args.rho, cuda=args.cuda)
 			intra3 = IntraAgg(features, feat_data.shape[1], args.emb_size, self.dataset['train_pos'], args.rho, cuda=args.cuda)
