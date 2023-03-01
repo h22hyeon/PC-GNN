@@ -13,8 +13,153 @@ import math
 	Modified from https://github.com/YingtongDou/CARE-GNN
 """
 
+class InterAgg5(nn.Module):
 
-class InterAgg(nn.Module):
+	def __init__(self, features, feature_dim, embed_dim, 
+				 train_pos, adj_lists, intraggs, inter='GNN', cuda=True):
+		"""
+		Initialize the inter-relation aggregator
+		:param features: the input node features or embeddings for all nodes
+		:param feature_dim: the input dimension
+		:param embed_dim: the embed dimension
+		:param train_pos: positive samples in training set
+		:param adj_lists: a list of adjacency lists for each single-relation graph
+		:param intraggs: the intra-relation aggregators used by each single-relation graph
+		:param inter: NOT used in this version, the aggregator type: 'Att', 'Weight', 'Mean', 'GNN'
+		:param cuda: whether to use GPU
+		"""
+		super(InterAgg, self).__init__()
+
+		self.features = features
+		self.dropout = 0.6
+		self.adj_lists = adj_lists
+		self.intra_agg1 = intraggs[0]
+		self.intra_agg2 = intraggs[1]
+		self.intra_agg3 = intraggs[2]
+		self.intra_agg4 = intraggs[3]
+		self.intra_agg5 = intraggs[4]
+		self.embed_dim = embed_dim
+		self.feat_dim = feature_dim
+		self.inter = inter
+		self.cuda = cuda
+		self.intra_agg1.cuda = cuda
+		self.intra_agg2.cuda = cuda
+		self.intra_agg3.cuda = cuda
+		self.intra_agg4.cuda = cuda
+		self.intra_agg5.cuda = cuda
+		self.train_pos = train_pos
+
+		# initial filtering thresholds
+		self.thresholds = [0.5, 0.5, 0.5, 0.5, 0.5]
+
+		# parameter used to transform node embeddings before inter-relation aggregation
+		self.weight = nn.Parameter(torch.FloatTensor(self.embed_dim*len(intraggs)+self.feat_dim, self.embed_dim))
+		init.xavier_uniform_(self.weight)
+
+		# label predictor for similarity measure
+		self.label_clf = nn.Linear(self.feat_dim, 2)
+
+		# initialize the parameter logs
+		self.weights_log = []
+		self.thresholds_log = [self.thresholds]
+		self.relation_score_log = []
+
+	def forward(self, nodes, labels, train_flag=True):
+		"""
+		:param nodes: a list of batch node ids
+		:param labels: a list of batch node labels
+		:param train_flag: indicates whether in training or testing mode
+		:return combined: the embeddings of a batch of input node features
+		:return center_scores: the label-aware scores of batch nodes
+		"""
+
+		# extract 1-hop neighbor ids from adj lists of each single-relation graph
+		to_neighs = []
+		for adj_list in self.adj_lists: # 각 relation을 통해 연결되는 이웃 노드들의 set으로 구성된 list가 생성됨.
+			to_neighs.append([set(adj_list[int(node)]) for node in nodes])
+
+		"""
+		Relation에 따른 노드 set을 구하는 부분이 하드코딩 되어있음.
+		따라서 relation type이 다른 데이터셋을 학습할 경우 일부 코드 수정이 필요할 것으로 보임 (파서로 자동화 혹은 하드코딩으로 해결).
+		"""
+		# find unique nodes and their neighbors used in current batch
+		unique_nodes = set.union(set.union(*to_neighs[0]), set.union(*to_neighs[1]), # 배치에 포함된 노드와 그 이웃 노드들의 set이 생성됨.
+								 set.union(*to_neighs[2], set(nodes)))
+
+		# calculate label-aware scores
+		if self.cuda:
+			batch_features = self.features(torch.cuda.LongTensor(list(unique_nodes))) # unique node들에 대한 feature를 슬라이싱하여 batch_feature로 정의함.
+			pos_features = self.features(torch.cuda.LongTensor(list(self.train_pos))) # 그 중에서 positive sample의 feature를 슬라이싱하여 pos_features로 정의함.
+		else:
+			batch_features = self.features(torch.LongTensor(list(unique_nodes)))
+			pos_features = self.features(torch.LongTensor(list(self.train_pos)))
+		batch_scores = self.label_clf(batch_features) # batch_features를 latent space로 투영함.
+		pos_scores = self.label_clf(pos_features) # pos_features를 latent space로 투영함.
+
+		# 배치를 구성하는 노드의 ID(original graph의 index -> key)와 unique_nodes에서의 인덱스(-> value)를 매핑하는 딕셔너리를 정의함.
+		id_mapping = {node_id: index for node_id, index in zip(unique_nodes, range(len(unique_nodes)))}
+
+		# the label-aware scores for current batch of nodes
+		center_scores = batch_scores[itemgetter(*nodes)(id_mapping), :] # mapping 딕셔너리를 통해 배치 노드의 label-aware score를 구한다 (슬라이싱).
+
+		# get neighbor node id list for each batch node and relation
+		r1_list = [list(to_neigh) for to_neigh in to_neighs[0]] # 각 relation을 통해 연결되는 이웃 노드들을 r*_list로 정의한다 (set을 list로 변환함.).
+		r2_list = [list(to_neigh) for to_neigh in to_neighs[1]]
+		r3_list = [list(to_neigh) for to_neigh in to_neighs[2]]
+		r4_list = [list(to_neigh) for to_neigh in to_neighs[3]]
+		r5_list = [list(to_neigh) for to_neigh in to_neighs[4]]
+
+		# assign label-aware scores to neighbor nodes for each batch node and relation
+		r1_scores = [batch_scores[itemgetter(*to_neigh)(id_mapping), :].view(-1, 2) for to_neigh in r1_list] # 각 relation마다
+		r2_scores = [batch_scores[itemgetter(*to_neigh)(id_mapping), :].view(-1, 2) for to_neigh in r2_list] # Batch에 존재하는 [개별 노드와 그 이웃에 대한 label-aware score]를 구한다 (슬라이싱). 
+		r3_scores = [batch_scores[itemgetter(*to_neigh)(id_mapping), :].view(-1, 2) for to_neigh in r3_list]
+		r4_scores = [batch_scores[itemgetter(*to_neigh)(id_mapping), :].view(-1, 2) for to_neigh in r4_list]
+		r5_scores = [batch_scores[itemgetter(*to_neigh)(id_mapping), :].view(-1, 2) for to_neigh in r5_list]
+
+		# count the number of neighbors kept for aggregation for each batch node and relation
+		""""
+		이 부분에서 threshold에 대한 부분은 하드코딩 되어 있음. 
+		따라서 모든 relation에 대하여 각 노드는 이웃의 유사도가 상위 50%에 해당하는 노드들로부터 message를 받게됨. 
+		"""
+		r1_sample_num_list = [math.ceil(len(neighs) * self.thresholds[0]) for neighs in r1_list] # 각 relation마다
+		r2_sample_num_list = [math.ceil(len(neighs) * self.thresholds[1]) for neighs in r2_list] # Batch에 존재하는 개별 노드가 몇 개의 이웃을 통해 aggregation 할 것인지 결정한다. 
+		r3_sample_num_list = [math.ceil(len(neighs) * self.thresholds[2]) for neighs in r3_list]
+		r4_sample_num_list = [math.ceil(len(neighs) * self.thresholds[3]) for neighs in r4_list]
+		r5_sample_num_list = [math.ceil(len(neighs) * self.thresholds[4]) for neighs in r5_list]
+
+		# intra-aggregation steps for each relation
+		# Eq. (8) in the paper
+		# r1_feats은 배치의 각 노드에 대한 representation을 의미한다.
+		# r1_scores은 각 타겟 노드에 대한 선택된 이웃 노드들의 score diff를 의미한다 (이용하려면 매핑되는 노드의 인덱스가 필요함. 현재는 사용 X).
+		r1_feats, r1_scores = self.intra_agg1.forward(nodes, labels, r1_list, center_scores, r1_scores, pos_scores, r1_sample_num_list, train_flag)
+		r2_feats, r2_scores = self.intra_agg2.forward(nodes, labels, r2_list, center_scores, r2_scores, pos_scores, r2_sample_num_list, train_flag)
+		r3_feats, r3_scores = self.intra_agg3.forward(nodes, labels, r3_list, center_scores, r3_scores, pos_scores, r3_sample_num_list, train_flag)
+		r4_feats, r4_scores = self.intra_agg4.forward(nodes, labels, r4_list, center_scores, r4_scores, pos_scores, r4_sample_num_list, train_flag)
+		r5_feats, r5_scores = self.intra_agg5.forward(nodes, labels, r5_list, center_scores, r5_scores, pos_scores, r5_sample_num_list, train_flag)
+
+		# get features or embeddings for batch nodes
+		if self.cuda and isinstance(nodes, list):
+			index = torch.LongTensor(nodes).cuda()
+		else:
+			index = torch.LongTensor(nodes)
+		self_feats = self.features(index)
+
+		# number of nodes in a batch
+		n = len(nodes)
+
+		# concat the intra-aggregated embeddings from each relation
+		# Eq. (9) in the paper
+		cat_feats = torch.cat((self_feats, r1_feats, r2_feats, r3_feats, r4_feats, r5_feats), dim=1)
+
+		"""
+		각 relation의 embedding을 통합하기 위한 weight를 학습해야 한다!
+		"""
+		combined = F.relu(cat_feats.mm(self.weight).t()) # intra-aggregated embeddings이다!
+
+		return combined, center_scores # 통합된 embedding과 배치의 각 노드에 대한 label-aware score(어디에 쓰이는지..? -> latent space로 투영하는 가중치의 학습을 위해)를 반환한다.
+
+
+class InterAgg3(nn.Module):
 
 	def __init__(self, features, feature_dim, embed_dim, 
 				 train_pos, adj_lists, intraggs, inter='GNN', cuda=True):

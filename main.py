@@ -108,6 +108,7 @@ def get_args():
     parser.add_argument('--optimizer', type=str, default='adam', help='random seed')
     parser.add_argument('--lr', type=float, default=0.01, help='random seed')
     parser.add_argument('--weight_decay', type=float, default=0.001, help='random seed')
+    parser.add_argument('--batch_size', type=int, default=1024, help='random seed')
     parser.add_argument('--num_epochs', type=int, default=201, help='random seed')
     parser.add_argument('--alpha', type=int, default=2, help='random seed')
     parser.add_argument('--graph_id', type=int, default=0, help='random seed')

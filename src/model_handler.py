@@ -8,7 +8,7 @@ from sklearn.preprocessing import StandardScaler
 
 from src.utils import test_pcgnn, test_sage, load_data, pos_neg_split, normalize, pick_step
 from src.model import PCALayer
-from src.layers import InterAgg, IntraAgg
+from src.layers import InterAgg3, InterAgg5, IntraAgg
 from src.graphsage import *
 
 
@@ -107,12 +107,12 @@ class ModelHandler(object):
 			intra3 = IntraAgg(features, feat_data.shape[1], args.emb_size, self.dataset['train_pos'], args.rho, cuda=args.cuda)
 			intra4 = IntraAgg(features, feat_data.shape[1], args.emb_size, self.dataset['train_pos'], args.rho, cuda=args.cuda)
 			intra5 = IntraAgg(features, feat_data.shape[1], args.emb_size, self.dataset['train_pos'], args.rho, cuda=args.cuda)
-			inter1 = InterAgg(features, feat_data.shape[1], args.emb_size, self.dataset['train_pos'], adj_lists, [intra1, intra2, intra3, intra4, intra5], inter=args.multi_relation, cuda=args.cuda)
+			inter1 = InterAgg5(features, feat_data.shape[1], args.emb_size, self.dataset['train_pos'], adj_lists, [intra1, intra2, intra3, intra4, intra5], inter=args.multi_relation, cuda=args.cuda)
 		elif args.model == 'PCGNN':
 			intra1 = IntraAgg(features, feat_data.shape[1], args.emb_size, self.dataset['train_pos'], args.rho, cuda=args.cuda)
 			intra2 = IntraAgg(features, feat_data.shape[1], args.emb_size, self.dataset['train_pos'], args.rho, cuda=args.cuda)
 			intra3 = IntraAgg(features, feat_data.shape[1], args.emb_size, self.dataset['train_pos'], args.rho, cuda=args.cuda)
-			inter1 = InterAgg(features, feat_data.shape[1], args.emb_size, self.dataset['train_pos'], 
+			inter1 = InterAgg3(features, feat_data.shape[1], args.emb_size, self.dataset['train_pos'], 
 							  adj_lists, [intra1, intra2, intra3], inter=args.multi_relation, cuda=args.cuda)
 		elif args.model == 'SAGE':
 			agg_sage = MeanAggregator(features, cuda=args.cuda)
