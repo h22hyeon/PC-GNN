@@ -28,7 +28,7 @@ class InterAgg5(nn.Module):
 		:param inter: NOT used in this version, the aggregator type: 'Att', 'Weight', 'Mean', 'GNN'
 		:param cuda: whether to use GPU
 		"""
-		super(InterAgg, self).__init__()
+		super(InterAgg5, self).__init__()
 
 		self.features = features
 		self.dropout = 0.6
@@ -84,7 +84,7 @@ class InterAgg5(nn.Module):
 		"""
 		# find unique nodes and their neighbors used in current batch
 		unique_nodes = set.union(set.union(*to_neighs[0]), set.union(*to_neighs[1]), # 배치에 포함된 노드와 그 이웃 노드들의 set이 생성됨.
-								 set.union(*to_neighs[2], set(nodes)))
+								 set.union(*to_neighs[2], set(nodes)), set.union(*to_neighs[3], set(nodes)), set.union(*to_neighs[4], set(nodes)))
 
 		# calculate label-aware scores
 		if self.cuda:
@@ -174,7 +174,7 @@ class InterAgg3(nn.Module):
 		:param inter: NOT used in this version, the aggregator type: 'Att', 'Weight', 'Mean', 'GNN'
 		:param cuda: whether to use GPU
 		"""
-		super(InterAgg, self).__init__()
+		super(InterAgg3, self).__init__()
 
 		self.features = features
 		self.dropout = 0.6

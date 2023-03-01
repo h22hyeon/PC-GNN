@@ -16,9 +16,11 @@ import os
 """
 
 class log:
-	def __init__(self):
+	def __init__(self, model_name=None):
+		self.time_step = str(datetime.now())
+		self.save_dir_path = f"/data/Save_model({model_name})"
 		self.log_dir_path = "./log"
-		self.log_file_name = datetime.now().strftime("%Y-%m-%d %H:%M") + ".log"
+		self.log_file_name = f"({model_name})" + self.time_step + ".log"
 		self.train_log_path = os.path.join(self.log_dir_path, "train", self.log_file_name)
 		self.valid_log_path = os.path.join(self.log_dir_path, "valid", self.log_file_name)
 		self.test_log_path = os.path.join(self.log_dir_path, "test", self.log_file_name)

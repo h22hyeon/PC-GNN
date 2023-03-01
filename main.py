@@ -19,7 +19,7 @@ def set_random_seed(seed):
 
 
 def main(config):
-    ckp = log()
+    ckp = log(config['model_name'])
     config_lines = print_config(config)
     ckp.write_train_log(config_lines, print_line=False)
     ckp.write_valid_log(config_lines, print_line=False)
