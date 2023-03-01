@@ -27,7 +27,7 @@ class ModelHandler(object):
 		os.environ["CUDA_VISIBLE_DEVICES"] = args.cuda_id
 
 		# load graph, feature, and label
-		homo, relation_list, feat_data, labels = load_data(args.data_name, prefix=args.data_dir) # KDK 데이터 셋에서 realation의 수가 달라질 수 있어 수정함.
+		homo, relation_list, feat_data, labels = load_data(args.data_name, prefix=args.data_dir, graph_id=args.graph_id) # KDK 데이터 셋에서 realation의 수가 달라질 수 있어 수정함.
 
 		# train/validation/test set 분할.
 		np.random.seed(args.seed)

@@ -101,26 +101,28 @@ def load_data(data, prefix='data/', graph_id=None):
 		file.close()
 		relation_list = [relation1, relation2, relation3]
 	elif data == 'KDK':
-		homo = None
-		path = "/data/graphs_v3"
 		postfix = "(CSC).npz"
 
 		graph_num = str(graph_id).zfill(3)
-		feature_path = os.path.join(path, "attributes", graph_num + "_node_feature" + postfix)
-		label_path = os.path.join(path, "labels", graph_num + "_label.npy")
+		feature_path = os.path.join(prefix, "attributes", graph_num + "_node_feature" + postfix)
+		label_path = os.path.join(prefix, "labels", graph_num + "_label.npy")
 
 		labels = np.load(label_path).flatten()
 		feat_data = scipy.sparse.load_npz(feature_path).astype(float).todense().A
 
-		network_dir_path_hetero = os.path.join(path, "G0_Hetero")
+		network_dir_path_hetero = os.path.join(prefix, "G0_Hetero")
 		network_type_list = ["_c_acc_c_network", "_c_clcare_c_network", "_c_fp_c_network",
 						 "_c_hsdrcare_c_network","_c_insr_c_network"]
 		network_path_list = [os.path.join(network_dir_path_hetero, graph_num + network_type_list[i] + postfix) for i in range(len(network_type_list))]
-
 		relation_list = [scipy.sparse.load_npz(network_path_list[i]) for i in range(len(network_path_list))]
-
 		for i, relation in enumerate(relation_list):
 			relation_list[i] = relation + sp.eye(relation.shape[0])
+		
+		network_dir_path_homo = os.path.join(prefix, "G0_Homo")
+		homo_network_path = os.path.join(network_dir_path_homo, graph_num + "_G0_Homo_network" + postfix)
+		homo = scipy.sparse.load_npz(homo_network_path)
+		homo = homo + sp.eye(homo.shape[0])
+
 
 	return homo, relation_list, feat_data, labels
 
