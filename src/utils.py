@@ -116,12 +116,12 @@ def load_data(data, prefix='data/', graph_id=None):
 		network_path_list = [os.path.join(network_dir_path_hetero, graph_num + network_type_list[i] + postfix) for i in range(len(network_type_list))]
 		relation_list = [scipy.sparse.load_npz(network_path_list[i]) for i in range(len(network_path_list))]
 		for i, relation in enumerate(relation_list):
-			relation_list[i] = relation + sp.eye(relation.shape[0])
+			relation_list[i] = sparse_to_adjlist_for_train(relation + sp.eye(relation.shape[0]))
 		
 		network_dir_path_homo = os.path.join(prefix, "G0_Homo")
 		homo_network_path = os.path.join(network_dir_path_homo, graph_num + "_G0_Homo_network" + postfix)
 		homo = scipy.sparse.load_npz(homo_network_path)
-		homo = homo + sp.eye(homo.shape[0])
+		homo = sparse_to_adjlist_for_train(homo + sp.eye(homo.shape[0]))
 
 
 	return homo, relation_list, feat_data, labels
@@ -158,6 +158,17 @@ def sparse_to_adjlist(sp_matrix, filename): # CSC 포멧의 인접행렬을 adjl
 		pickle.dump(adj_lists, file)
 	file.close()
 
+def sparse_to_adjlist_for_train(sp_matrix): # CSC 포멧의 인접행렬을 adjlist 형태로 변환하는 함수로 학습 과정에서 사용한다.
+	# add self loop
+	homo_adj = sp_matrix + sp.eye(sp_matrix.shape[0]) 
+	# create adj_list
+	adj_lists = defaultdict(set)
+	edges = homo_adj.nonzero() # 해당 함수는 non-zero value를 갖는 인덱스 (row, col)을 리스트 퓨플로 반환한다.
+	for index, node in enumerate(edges[0]): 
+		adj_lists[node].add(edges[1][index])
+		adj_lists[edges[1][index]].add(node) # symmetric relation을 커버하기 위한 코드.
+	
+	return adj_lists
 
 def pos_neg_split(nodes, labels): # label을 기준으로 positive와 netgative sample의 노드 번호를 반환하는 함수.
 	"""
