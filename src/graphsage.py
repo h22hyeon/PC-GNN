@@ -140,6 +140,7 @@ class Encoder(nn.Module):
 
 		if not self.gcn:
 			if self.cuda:
+				index = index.cuda()
 				self_feats = self.features(index).cuda()
 			else:
 				self_feats = self.features(index)

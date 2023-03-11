@@ -24,9 +24,13 @@ class ModelHandler(object):
 		self.ckp = ckp
 		args = argparse.Namespace(**config)
 		args.cuda = not args.no_cuda and torch.cuda.is_available()
-
-		# 인덱싱이 잘 안되는 오류 발생해서 교체함 : os.environ["CUDA_VISIBLE_DEVICES"] = args.cuda_id
-		device = torch.device(f'cuda:{args.cuda_id}' if torch.cuda.is_available() else 'cpu')
+		
+		# os.environ["CUDA_VISIBLE_DEVICES"] = args.cuda_id
+		# device = torch.device(f'cuda:{args.cuda_id}' if torch.cuda.is_available() else 'cpu')
+		# torch.cuda.set_device(device)
+		
+		os.environ["CUDA_LAUNCH_BLOKING"] = "1"
+		device = torch.device(args.cuda_id)
 		torch.cuda.set_device(device)
 
 		# load graph, feature, and label
@@ -111,12 +115,12 @@ class ModelHandler(object):
 			intra4 = IntraAgg(features, feat_data.shape[1], args.emb_size, self.dataset['train_pos'], args.rho, cuda=args.cuda)
 			intra5 = IntraAgg(features, feat_data.shape[1], args.emb_size, self.dataset['train_pos'], args.rho, cuda=args.cuda)
 			inter1 = InterAgg5(features, feat_data.shape[1], args.emb_size, self.dataset['train_pos'], adj_lists, [intra1, intra2, intra3, intra4, intra5], inter=args.multi_relation, cuda=args.cuda)
-		elif args.model == 'PCGNN':
+		elif args.model == 'PCGNN' and (args.data_name == "yelp" or args.data_name == "amamzon"):
 			intra1 = IntraAgg(features, feat_data.shape[1], args.emb_size, self.dataset['train_pos'], args.rho, cuda=args.cuda)
 			intra2 = IntraAgg(features, feat_data.shape[1], args.emb_size, self.dataset['train_pos'], args.rho, cuda=args.cuda)
 			intra3 = IntraAgg(features, feat_data.shape[1], args.emb_size, self.dataset['train_pos'], args.rho, cuda=args.cuda)
 			inter1 = InterAgg3(features, feat_data.shape[1], args.emb_size, self.dataset['train_pos'], 
-							  adj_lists, [intra1, intra2, intra3], inter=args.multi_relation, cuda=args.cuda)
+							adj_lists, [intra1, intra2, intra3], inter=args.multi_relation, cuda=args.cuda)
 		elif args.model == 'SAGE':
 			agg_sage = MeanAggregator(features, cuda=args.cuda)
 			enc_sage = Encoder(features, feat_data.shape[1], args.emb_size, adj_lists, agg_sage, gcn=False, cuda=args.cuda)
@@ -138,7 +142,7 @@ class ModelHandler(object):
 
 		optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, gnn_model.parameters()), lr=args.lr, weight_decay=args.weight_decay)
 
-		dir_saver = os.path.join("/data/PC-GNN_models/", self.ckp.log_file_name)
+		dir_saver = os.path.join("/temp/PC-GNN_models/", self.ckp.log_file_name)
 		os.makedirs(dir_saver,exist_ok=True)
 		path_saver = os.path.join(dir_saver, '{}_{}.pkl'.format(args.data_name, args.model))
 		f1_mac_best, auc_best, ep_best = 0, 0, -1

@@ -9,22 +9,23 @@ from sklearn.metrics import f1_score, accuracy_score, recall_score, roc_auc_scor
 from collections import defaultdict
 from datetime import datetime
 import os
-
+import torch
+from scipy.sparse import csc_matrix
 
 """
 	Utility functions to handle data and evaluate model.
 """
 
 class log:
-	def __init__(self, model_name=None):
+	def __init__(self, model_name=None, data_name=None):
 		self.time_step = str(datetime.now())
 		self.save_dir_path = f"/data/Save_model({model_name})"
-		self.log_dir_path = "./log"
+		self.log_dir_path = f"./log({data_name}, {model_name})"
 		self.log_file_name = f"({model_name})" + self.time_step + ".log"
 		self.train_log_path = os.path.join(self.log_dir_path, "train", self.log_file_name)
 		self.valid_log_path = os.path.join(self.log_dir_path, "valid", self.log_file_name)
 		self.test_log_path = os.path.join(self.log_dir_path, "test", self.log_file_name)
-		self.multi_run_log_path = os.path.join(self.log_dir_path, "multi-run(total)", self.log_file_name)
+		self.multi_run_log_path = os.path.join(self.log_dir_path, "multiple-run", self.log_file_name)
 		os.makedirs(os.path.join(self.log_dir_path, "train"), exist_ok=True)
 		os.makedirs(os.path.join(self.log_dir_path, "valid"), exist_ok=True)
 		os.makedirs(os.path.join(self.log_dir_path, "test"), exist_ok=True)
@@ -50,14 +51,13 @@ class log:
 		log_file = open(self.test_log_path, 'a')
 		log_file.write(line + "\n")
 		log_file.close()
-	
+
 	def multi_run_log(self, line, print_line=True):
 		if print_line:
 			print(line)
 		log_file = open(self.multi_run_log_path, 'a')
 		log_file.write(line + "\n")
 		log_file.close()
-
 
 
 def load_data(data, prefix='data/', graph_id=None):
@@ -67,9 +67,11 @@ def load_data(data, prefix='data/', graph_id=None):
 	"""
 	# yml 파일에 설정된 데이터셋(data_name)에 따라 label, feature, relation을 불러옴. 
 	if data == 'yelp':
-		data_file = loadmat(prefix + 'YelpChi.mat')
-		labels = data_file['label'].flatten()
-		feat_data = data_file['features'].todense().A
+		prefix = "/data/pyg/YelpChi/processed/"
+		data_file = torch.load(prefix + "YelpChi_data.pt")[0]
+		labels = np.array(data_file['review']['y'])
+		feat_data = np.array(data_file['review']['x'])
+
 		# load the preprocessed adj_lists
 		with open(prefix + 'yelp_homo_adjlists.pickle', 'rb') as file:
 			homo = pickle.load(file)
@@ -86,25 +88,76 @@ def load_data(data, prefix='data/', graph_id=None):
 		relation_list = [relation1, relation2, relation3]
 
 	elif data == 'amazon':
-		data_file = loadmat(prefix + 'Amazon.mat')
-		labels = data_file['label'].flatten()
-		feat_data = data_file['features'].todense().A
+		prefix = "/data/pyg/AmazonFraud/processed/"
+		data_file = torch.load(prefix + "AmazonFraud_data.pt")[0]
+
+		labels = np.array(data_file['user']['y'])
+		feat_data = np.array(data_file['user']['x'])
+
 		# load the preprocessed adj_lists
-		with open(prefix + 'amz_homo_adjlists.pickle', 'rb') as file:
+		with open(prefix + 'amazon_homo_adjlists.pickle', 'rb') as file:
 			homo = pickle.load(file)
 		file.close()
-		with open(prefix + 'amz_upu_adjlists.pickle', 'rb') as file:
+		with open(prefix + 'amazon_upu_adjlists.pickle', 'rb') as file:
 			relation1 = pickle.load(file)
 		file.close()
-		with open(prefix + 'amz_usu_adjlists.pickle', 'rb') as file:
+		with open(prefix + 'amazon_usu_adjlists.pickle', 'rb') as file:
 			relation2 = pickle.load(file)
 		file.close()
-		with open(prefix + 'amz_uvu_adjlists.pickle', 'rb') as file:
+		with open(prefix + 'amazon_uvu_adjlists.pickle', 'rb') as file:
 			relation3 = pickle.load(file)
 		file.close()
 		relation_list = [relation1, relation2, relation3]
 
-	elif data == 'KDK':
+	elif data == 'tfinance':
+		prefix = "/data/pyg/TFinance/processed/"
+		data_file = torch.load(prefix + "tfinance_data.pt")[0]
+
+		labels = np.array(data_file['y'])
+		feat_data = np.array(data_file['x'])
+
+		# load the preprocessed adj_lists
+		with open(prefix + 'tfinance_homo_adjlists.pickle', 'rb') as file:
+			homo = pickle.load(file)
+		file.close()
+		with open(prefix + 'tfinance_homo_adjlists.pickle', 'rb') as file:
+			relation1 = pickle.load(file)
+		file.close()
+		relation_list = [relation1]
+
+	elif data == 'elliptic':
+		prefix = "/data/pyg/Elliptic/processed/"
+		data_file = torch.load(prefix + "elliptic_data.pt")[0]
+
+		labels = np.array(data_file['y'])
+		feat_data = np.array(data_file['x'])
+
+		# load the preprocessed adj_lists
+		with open(prefix + 'elliptic_homo_adjlists.pickle', 'rb') as file:
+			homo = pickle.load(file)
+		file.close()
+		with open(prefix + 'elliptic_homo_adjlists.pickle', 'rb') as file:
+			relation1 = pickle.load(file)
+		file.close()
+		relation_list = [relation1]
+
+	elif data == 'weibo':
+		prefix = "/data/pyg/Weibo/processed/"
+		data_file = torch.load(prefix + "weibo.pt")[0]
+
+		labels = np.array(data_file['y'])
+		feat_data = np.array(data_file['x'])
+
+		# load the preprocessed adj_lists
+		with open(prefix + 'weibo_homo_adjlists.pickle', 'rb') as file:
+			homo = pickle.load(file)
+		file.close()
+		with open(prefix + 'weibo_homo_adjlists.pickle', 'rb') as file:
+			relation1 = pickle.load(file)
+		file.close()
+		relation_list = [relation1]	
+
+	elif data == 'kdk':
 		postfix = "(CSC).npz"
 
 		graph_num = str(graph_id).zfill(3)
@@ -121,7 +174,7 @@ def load_data(data, prefix='data/', graph_id=None):
 		relation_list = [scipy.sparse.load_npz(network_path_list[i]) for i in range(len(network_path_list))]
 		for i, relation in enumerate(relation_list):
 			relation_list[i] = sparse_to_adjlist_for_train(relation + sp.eye(relation.shape[0]))
-		
+
 		network_dir_path_homo = os.path.join(prefix, "G0_Homo")
 		homo_network_path = os.path.join(network_dir_path_homo, graph_num + "_G0_Homo_network" + postfix)
 		homo = scipy.sparse.load_npz(homo_network_path)
@@ -171,7 +224,7 @@ def sparse_to_adjlist_for_train(sp_matrix): # CSC 포멧의 인접행렬을 adjl
 	for index, node in enumerate(edges[0]): 
 		adj_lists[node].add(edges[1][index])
 		adj_lists[edges[1][index]].add(node) # symmetric relation을 커버하기 위한 코드.
-	
+
 	return adj_lists
 
 def pos_neg_split(nodes, labels): # label을 기준으로 positive와 netgative sample의 노드 번호를 반환하는 함수.
@@ -193,10 +246,10 @@ def pos_neg_split(nodes, labels): # label을 기준으로 positive와 netgative 
 
 
 def pick_step(idx_train, y_train, adj_list, size): # 논문에서 제안한 label balance sampler에 해당하는 함수.
-    degree_train = [len(adj_list[node]) for node in idx_train] # adj list (homo)를 통해 train 노드들의 차수를 리스트로 반환한다 (self loop 포함됨).
-    lf_train = (y_train.sum()-len(y_train))*y_train + len(y_train) 
-    smp_prob = np.array(degree_train) / lf_train # Sampling probability를 (P(v))를 구한다 (해당 노드의 label의 수와 차수의 비율로 설정하여 imbalance problem 완화함.).
-    return random.choices(idx_train, weights=smp_prob, k=size)
+	degree_train = [len(adj_list[node]) for node in idx_train] # adj list (homo)를 통해 train 노드들의 차수를 리스트로 반환한다 (self loop 포함됨).
+	lf_train = (y_train.sum()-len(y_train))*y_train + len(y_train) 
+	smp_prob = np.array(degree_train) / lf_train # Sampling probability를 (P(v))를 구한다 (해당 노드의 label의 수와 차수의 비율로 설정하여 imbalance problem 완화함.).
+	return random.choices(idx_train, weights=smp_prob, k=size)
 
 def test_sage(test_cases, labels, model, batch_size, ckp, thres=0.5, flag=None):
 	"""
@@ -217,22 +270,27 @@ def test_sage(test_cases, labels, model, batch_size, ckp, thres=0.5, flag=None):
 		i_end = min((iteration + 1) * batch_size, len(test_cases))
 		batch_nodes = test_cases[i_start:i_end]
 		batch_label = labels[i_start:i_end]
+
 		gnn_prob = model.to_prob(batch_nodes)
+
 		f1_gnn += f1_score(batch_label, gnn_prob.data.cpu().numpy().argmax(axis=1), average="macro")
 		acc_gnn += accuracy_score(batch_label, gnn_prob.data.cpu().numpy().argmax(axis=1))
 		recall_gnn += recall_score(batch_label, gnn_prob.data.cpu().numpy().argmax(axis=1), average="macro")
+
 		gnn_list.extend(gnn_prob.data.cpu().numpy()[:, 1].tolist())
 
 	auc_gnn = roc_auc_score(labels, np.array(gnn_list))
 	ap_gnn = average_precision_score(labels, np.array(gnn_list))
+
+
 	line1= f"GNN F1: {f1_gnn / test_batch_num:.4f}\tGNN Accuracy: {acc_gnn / test_batch_num:.4f}"+\
-       f"\tGNN Recall: {recall_gnn / test_batch_num:.4f}\tGNN auc: {auc_gnn:.4f}\tGNN ap: {ap_gnn:.4f}"
-		
+	   f"\tGNN Recall: {recall_gnn / test_batch_num:.4f}\tGNN auc: {auc_gnn:.4f}\tGNN ap: {ap_gnn:.4f}"
+
 	if flag=="val":
 		ckp.write_valid_log("Validation: "+ line1)
 	elif flag=="test":
 		ckp.write_test_log("Test: "+ line1)
-	
+
 	return auc_gnn, (recall_gnn / test_batch_num), (f1_gnn / test_batch_num)
 
 
@@ -250,6 +308,7 @@ def test_pcgnn(test_cases, labels, model, batch_size, ckp, thres=0.5, flag=None)
 	f1_gnn = 0.0
 	acc_gnn = 0.0
 	recall_gnn = 0.0
+
 	f1_label1 = 0.0
 	acc_label1 = 0.00
 	recall_label1 = 0.0
@@ -286,8 +345,8 @@ def test_pcgnn(test_cases, labels, model, batch_size, ckp, thres=0.5, flag=None)
 #        f"\tLabel1 Recall: {recall_label1 / test_batch_num:.4f}\tLabel1 auc: {auc_label1:.4f}\tLabel1 ap: {ap_label1:.4f}"
 
 	line1= f"GNN F1: {f1_gnn / test_batch_num:.4f}\tGNN Accuracy: {acc_gnn / test_batch_num:.4f}"+\
-       f"\tGNN Recall: {recall_gnn / test_batch_num:.4f}\tGNN AUC-ROC: {auc_gnn:.4f}\tGNN AP: {ap_gnn:.4f}"
-	
+	   f"\tGNN Recall: {recall_gnn / test_batch_num:.4f}\tGNN AUC-ROC: {auc_gnn:.4f}\tGNN AP: {ap_gnn:.4f}"
+
 	if flag=="val":
 		ckp.write_valid_log("Validation: "+ line1)
 		# ckp.write_valid_log("Validation: "+ line2, print_line=False)
@@ -295,7 +354,7 @@ def test_pcgnn(test_cases, labels, model, batch_size, ckp, thres=0.5, flag=None)
 		ckp.write_test_log("Test: "+ line1)
 		# ckp.write_test_log("Test: "+ line2, print_line=False)
 
-	return auc_gnn, recall_gnn, (f1_gnn / test_batch_num)
+	return auc_gnn, (recall_gnn / test_batch_num), (f1_gnn / test_batch_num)
 
 def prob2pred(y_prob, thres=0.5):
 	"""
