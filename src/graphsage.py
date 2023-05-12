@@ -31,7 +31,7 @@ class GraphSage(nn.Module):
 		return scores.t()
 
 	def to_prob(self, nodes):
-		pos_scores = torch.sigmoid(self.forward(nodes))
+		pos_scores = F.log_softmax(self.forward(nodes), dim=2)
 		return pos_scores
 
 	def loss(self, nodes, labels):
@@ -59,7 +59,7 @@ class MeanAggregator(nn.Module):
 		self.cuda = cuda
 		self.gcn = gcn
 
-	def forward(self, nodes, to_neighs, num_sample=10):
+	def forward(self, nodes, to_neighs, num_sample=None):
 		"""
 		nodes --- list of nodes in a batch
 		to_neighs --- list of sets, each set is the set of neighbors for node in batch
@@ -86,6 +86,7 @@ class MeanAggregator(nn.Module):
 		if self.cuda:
 			mask = mask.cuda()
 		num_neigh = mask.sum(1, keepdim=True)
+
 		mask = mask.div(num_neigh)
 		if self.cuda:
 			embed_matrix = self.features(torch.LongTensor(unique_nodes_list).cuda())
@@ -112,7 +113,6 @@ class Encoder(nn.Module):
 		self.feat_dim = feature_dim
 		self.adj_lists = adj_lists
 		self.aggregator = aggregator
-		self.num_sample = num_sample
 		if base_model != None:
 			self.base_model = base_model
 
@@ -130,8 +130,7 @@ class Encoder(nn.Module):
 
 		nodes     -- list of nodes
 		"""
-		neigh_feats = self.aggregator.forward(nodes, [self.adj_lists[int(node)] for node in nodes],
-											  self.num_sample)
+		neigh_feats = self.aggregator.forward(nodes, [self.adj_lists[int(node)] for node in nodes])
 
 		if isinstance(nodes, list):
 			index = torch.LongTensor(nodes)
@@ -184,7 +183,7 @@ class GCNAggregator(nn.Module):
 	Aggregates a node's embeddings using normalized mean of neighbors' embeddings
 	"""
 
-	def __init__(self, features, cuda=False, gcn=False):
+	def __init__(self, features, cuda=False):
 		"""
 		Initializes the aggregator for a specific graph.
 
@@ -197,30 +196,34 @@ class GCNAggregator(nn.Module):
 
 		self.features = features
 		self.cuda = cuda
-		self.gcn = gcn
 
 	def forward(self, nodes, to_neighs):
 		"""
 		nodes --- list of nodes in a batch
-		to_neighs --- list of sets, each set is the set of neighbors for node in batch
+		to_neighs --- list of sets, each set is the set of neighbors for node in batch (현재 데이터는 self-loop도 포함한다.)
 		"""
 		# Local pointers to functions (speed hack)
-		
 		samp_neighs = to_neighs
 
-		#  Add self to neighs
+
+		#  Add self to neighs (self-loop가 존재한다면 해당 작업은 samp_neighs에 영향을 미치지 않음)
 		samp_neighs = [samp_neigh.union(set([int(nodes[i])])) for i, samp_neigh in enumerate(samp_neighs)]
+
 		unique_nodes_list = list(set.union(*samp_neighs))
+		# 노드 인덱스와 배치 내의 인덱스를 매핑하는 딕셔너리를 생성한다. 
 		unique_nodes = {n: i for i, n in enumerate(unique_nodes_list)}
+		# B X # of its neighbors의 크기만큼 마스크를 생성한다.
 		mask = Variable(torch.zeros(len(samp_neighs), len(unique_nodes)))
+		# 배치 내에 존재하는 이웃 노드들에 대한 인덱스를 저장한다.
 		column_indices = [unique_nodes[n] for samp_neigh in samp_neighs for n in samp_neigh]
+		# 배치 내에 존재하는 노드의 인덱스를 해당 노드의 이웃 수만큼 생성하여 리스트를 정의한다.
 		row_indices = [i for i in range(len(samp_neighs)) for j in range(len(samp_neighs[i]))]
 		mask[row_indices, column_indices] = 1.0  # Adjacency matrix for the sub-graph
 		if self.cuda:
 			mask = mask.cuda()
 		row_normalized = mask.sum(1, keepdim=True).sqrt()
-		col_normalized = mask.sum(0, keepdim=True).sqrt()
-		mask = mask.div(row_normalized).div(col_normalized)
+		# col_normalized = mask.sum(0, keepdim=True).sqrt()
+		mask = mask.div(row_normalized)
 		if self.cuda:
 			embed_matrix = self.features(torch.LongTensor(unique_nodes_list).cuda())
 		else:
@@ -235,8 +238,7 @@ class GCNEncoder(nn.Module):
 
 	def __init__(self, features, feature_dim,
 				 embed_dim, adj_lists, aggregator,
-				 num_sample=10,
-				 base_model=None, gcn=False, cuda=False,
+				 base_model=None, cuda=False,
 				 feature_transform=False):
 		super(GCNEncoder, self).__init__()
 
@@ -244,11 +246,9 @@ class GCNEncoder(nn.Module):
 		self.feat_dim = feature_dim
 		self.adj_lists = adj_lists
 		self.aggregator = aggregator
-		self.num_sample = num_sample
 		if base_model != None:
 			self.base_model = base_model
 
-		self.gcn = gcn
 		self.embed_dim = embed_dim
 		self.cuda = cuda
 		self.aggregator.cuda = cuda
