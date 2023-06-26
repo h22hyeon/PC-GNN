@@ -10,3 +10,4 @@
 data/*
 __pycache__/*
 practice_exp_logs/*
+src/__pycache__/*
