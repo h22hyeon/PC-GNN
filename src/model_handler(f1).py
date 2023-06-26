@@ -76,50 +76,12 @@ class ModelHandler(object):
 
         def train(self):
                 args = self.args
-                # 클래스 변수로부터 feature, label, adj 생성한다.
-                feat_data, adj_lists = self.dataset['feat_data'], self.dataset['adj_lists']
                 idx_train, y_train = self.dataset['idx_train'], self.dataset['y_train']
                 idx_valid, y_valid, idx_test, y_test = self.dataset['idx_valid'], self.dataset['y_valid'], self.dataset['idx_test'], self.dataset['y_test']
-                
-                # initialize model input
-                features = nn.Embedding(feat_data.shape[0], feat_data.shape[1])
-                features.weight = nn.Parameter(torch.FloatTensor(feat_data), requires_grad=False)
-                features = features.cuda()
 
-                """
-                논문의 choosse 과정 (IntraAgg layer 안에서 이루어짐.)
+                self.model_select()
 
-                # 사용할 positive과 negative 비율을 유사하게 맞춰주기 위한 코드.
-                # Train positive set의 2배를 샘플링 하여 배치 구성에서 두 클래스의 비율을 유사하게 가져가려 함.
-                """
-                # build one-layer models
-                if args.model == 'SAGE':
-                        agg_sage = MeanAggregator(features, cuda=True)
-                        enc_sage = Encoder(features, feat_data.shape[1], args.emb_size, adj_lists, agg_sage, gcn=True, cuda=True)
-                elif args.model == 'GCN':
-                        agg_gcn = GCNAggregator(features, cuda=True)
-                        enc_gcn = GCNEncoder(features, feat_data.shape[1], args.emb_size, adj_lists, agg_gcn, cuda=True)
-
-                if args.model == 'PCGNN':
-                        if (args.data_name == "yelp") or (args.data_name.startswith('amazon')):
-                                intra1 = IntraAgg(features, feat_data.shape[1], args.emb_size, self.dataset['train_pos'], args.rho, cuda=True)
-                                intra2 = IntraAgg(features, feat_data.shape[1], args.emb_size, self.dataset['train_pos'], args.rho, cuda=True)
-                                intra3 = IntraAgg(features, feat_data.shape[1], args.emb_size, self.dataset['train_pos'], args.rho, cuda=True)
-                                inter1 = InterAgg3(features, feat_data.shape[1], args.emb_size, self.dataset['train_pos'], 
-                                                                adj_lists, [intra1, intra2, intra3], cuda=True)
-                        else:
-                                intra1 = IntraAgg(features, feat_data.shape[1], args.emb_size, self.dataset['train_pos'], args.rho, cuda=True)
-                                inter1 = InterAgg1(features, feat_data.shape[1], args.emb_size, self.dataset['train_pos'], 
-                                                                adj_lists, [intra1], cuda=True)
-                        model = PCALayer(2, inter1, args.alpha) # 앞서 정의한 inter/intra aggregator를 이용하여 PCGNN 모델을 생성함.
-                elif args.model == 'SAGE':
-                        # the vanilla GraphSAGE model as baseline
-                        # enc_sage.num_samples = 5
-                        model = GraphSage(2, enc_sage)
-                elif args.model == 'GCN':
-                        model = GCN(2, enc_gcn)
-
-                model = model.cuda()
+                model = self.model.cuda()
 
                 optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=args.lr, weight_decay=args.weight_decay)
                 auc_best, f1_mac_best, epoch_best = 1e-10, 1e-10, 0
@@ -176,3 +138,42 @@ class ModelHandler(object):
                 model.load_state_dict(torch.load(self.result.model_path))
                 auc_test, recall_test, f1_mac_test, precision_test = test(idx_test, y_test, model, self.args.batch_size, self.result, epoch_best=epoch_best, flag="test")
                 return auc_test, recall_test, f1_mac_test
+        
+        def model_select(self):
+                args = self.args
+                
+                # 클래스 변수로부터 feature, label, adj 생성한다.
+                feat_data, adj_lists = self.dataset['feat_data'], self.dataset['adj_lists']
+                
+                # initialize model input
+                features = nn.Embedding(feat_data.shape[0], feat_data.shape[1])
+                features.weight = nn.Parameter(torch.FloatTensor(feat_data), requires_grad=False)
+                features = features.cuda()
+                # build one-layer models
+                if args.model == 'SAGE':
+                        agg_sage = MeanAggregator(features, cuda=True)
+                        enc_sage = Encoder(features, feat_data.shape[1], args.emb_size, adj_lists, agg_sage, gcn=True, cuda=True)
+                elif args.model == 'GCN':
+                        agg_gcn = GCNAggregator(features, cuda=True)
+                        enc_gcn = GCNEncoder(features, feat_data.shape[1], args.emb_size, adj_lists, agg_gcn, cuda=True)
+
+                if args.model == 'PCGNN':
+                        if (args.data_name == "yelp") or (args.data_name.startswith('amazon')):
+                                intra1 = IntraAgg(features, feat_data.shape[1], args.emb_size, self.dataset['train_pos'], args.rho, cuda=True)
+                                intra2 = IntraAgg(features, feat_data.shape[1], args.emb_size, self.dataset['train_pos'], args.rho, cuda=True)
+                                intra3 = IntraAgg(features, feat_data.shape[1], args.emb_size, self.dataset['train_pos'], args.rho, cuda=True)
+                                inter1 = InterAgg3(features, feat_data.shape[1], args.emb_size, self.dataset['train_pos'], 
+                                                                adj_lists, [intra1, intra2, intra3], cuda=True)
+                        else:
+                                intra1 = IntraAgg(features, feat_data.shape[1], args.emb_size, self.dataset['train_pos'], args.rho, cuda=True)
+                                inter1 = InterAgg1(features, feat_data.shape[1], args.emb_size, self.dataset['train_pos'], 
+                                                                adj_lists, [intra1], cuda=True)
+                        model = PCALayer(2, inter1, args.alpha) # 앞서 정의한 inter/intra aggregator를 이용하여 PCGNN 모델을 생성함.
+                elif args.model == 'SAGE':
+                        # the vanilla GraphSAGE model as baseline
+                        # enc_sage.num_samples = 5
+                        model = GraphSage(2, enc_sage)
+                elif args.model == 'GCN':
+                        model = GCN(2, enc_gcn)
+                
+                self.model = model

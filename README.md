@@ -1,5 +1,7 @@
 # PC-GNN
 
+python main.py --data_name=amazon --model=GCN --emb_size=64 --lr=0.01 --num_epochs=101 --batch_size=1024 --valid_epochs=5 --alpha=2 --cuda_id=0 --multi_run
+
 This is the author implementation of "[Pick and Choose: A GNN-based Imbalanced Learning Approach for Fraud Detection](https://dl.acm.org/doi/abs/10.1145/3442381.3449989)" (WebConf 2021).
 
 Slides and video can be found [here](https://ponderly.github.io/).
